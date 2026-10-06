@@ -220,6 +220,18 @@ export interface RestrictivePractice {
   lastReportedDate?: string;
   monthlyUsageCount?: number;
   clinicalSupervisorId?: string;
+  bspSignOff?: {
+    signed: boolean;
+    signedBy?: string;
+    signedAt?: string;
+    credential?: string;
+  };
+  apoSignOff?: {
+    signed: boolean;
+    signedBy?: string;
+    signedAt?: string;
+    apoRegistrationNumber?: string;
+  };
 }
 
 export type IncidentCategory =
@@ -329,6 +341,16 @@ export interface Practitioner {
   historicalSuccessRate?: number; // e.g. 98 (%)
   completedSessionsCount?: number; // e.g. 420
   rating?: number; // e.g. 4.9
+  courseCompletions?: Array<{
+    courseId: string;
+    courseTitle: string;
+    completedAt: string;
+    expiresAt?: string;
+    provider?: string;
+    badge?: string;
+    status: 'Completed' | 'In Progress' | 'Expired';
+    certificateUrl?: string;
+  }>;
 }
 
 export interface ABCLog {

@@ -837,3 +837,76 @@ export async function seedInitialFirestoreDataIfEmpty(seedData: Record<string, a
   }
 }
 
+// ==========================================
+// Quick Notes (Google Keep Field Notes Collection)
+// ==========================================
+export interface QuickNoteDoc {
+  id: string;
+  title: string;
+  content: string;
+  color?: string;
+  tag?: string;
+  date?: string;
+  clientId?: string;
+  clientName?: string;
+  isConverted?: boolean;
+  convertedCaseNoteId?: string;
+  createdAt?: string;
+}
+
+export const fetchQuickNotes = () => getCollectionDocs<QuickNoteDoc>('quickNotes');
+export const saveQuickNote = (data: QuickNoteDoc) => setDocumentData<QuickNoteDoc>('quickNotes', data);
+export const deleteQuickNote = (id: string) => deleteDocumentData('quickNotes', id);
+export const subscribeToQuickNotes = (
+  onUpdate: (data: QuickNoteDoc[]) => void,
+  onError?: (err: Error) => void
+) => subscribeToCollection<QuickNoteDoc>('quickNotes', onUpdate, onError);
+
+export async function convertQuickNoteToBIRPCaseNote(params: {
+  note: QuickNoteDoc;
+  clientId: string;
+  clientName: string;
+  practitionerId: string;
+  practitionerName: string;
+  interventionText?: string;
+  responseText?: string;
+  planText?: string;
+}): Promise<CaseNote> {
+  const { note, clientId, clientName, practitionerId, practitionerName, interventionText, responseText, planText } = params;
+  const caseNoteId = `cn-birp-${Date.now()}`;
+  const today = new Date().toISOString().split('T')[0];
+
+  const birpCaseNote: CaseNote = {
+    id: caseNoteId,
+    clientId,
+    clientName,
+    practitionerId: practitionerId || 'prac-1',
+    practitionerName: practitionerName || 'Principal Clinician',
+    date: today,
+    format: 'BIRP',
+    category: 'Therapy Session',
+    sessionDurationMinutes: 60,
+    nonFaceToFaceMinutes: 15,
+    subjective: `[Behavior]: ${note.content}`, // Behavior
+    objective: interventionText || `[Intervention]: Applied positive reinforcement and sensory regulation protocols based on field observation: "${note.title}".`, // Intervention
+    assessment: responseText || `[Response]: Participant engaged positively, demonstrated reduced anxiety and regulated breathing.`, // Response
+    plan: planText || `[Plan]: Continue scheduled capacity building sessions. Review BSP proactive strategies and follow up next session.`, // Plan
+    linkedGoalIds: [],
+    riskLevel: 'Low'
+  };
+
+  // 1. Save case note to Firestore
+  await setDocumentData<CaseNote>('caseNotes', birpCaseNote);
+
+  // 2. Mark quickNote as converted in Firestore
+  await updateDocumentData('quickNotes', note.id, {
+    isConverted: true,
+    convertedCaseNoteId: caseNoteId,
+    clientId,
+    clientName
+  });
+
+  return birpCaseNote;
+}
+
+

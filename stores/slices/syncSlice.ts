@@ -130,6 +130,15 @@ export const createSyncSlice: StateCreator<RootStore, [], [], SyncSlice> = (set,
         syncStatus: state.isOnline ? 'pending' : 'offline'
       };
     });
+
+    // Register Background Sync API event with Service Worker
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator && 'SyncManager' in window) {
+      navigator.serviceWorker.ready.then((reg: any) => {
+        return reg.sync.register('sync-offline-mutations');
+      }).catch((swErr) => {
+        console.warn('Background sync registration notice:', swErr);
+      });
+    }
   },
 
   triggerDeltaSync: async () => {

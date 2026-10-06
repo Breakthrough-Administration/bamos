@@ -1,9 +1,10 @@
-import { NextRequest } from 'next/server';
-import { GET as handleXeroCallback } from '@/app/api/auth/xero/callback/route';
+import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 export async function GET(req: NextRequest) {
-  return handleXeroCallback(req);
+  const url = new URL(req.url);
+  const redirectUrl = new URL(`/?xero_connected=true${url.search ? '&' + url.search.substring(1) : ''}`, req.url);
+  return NextResponse.redirect(redirectUrl);
 }

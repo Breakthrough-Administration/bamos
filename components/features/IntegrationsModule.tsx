@@ -6,7 +6,7 @@ import { Boxes, CheckCircle2, RefreshCw, ExternalLink } from 'lucide-react';
 export const IntegrationsModule: React.FC = () => {
   const integrations = [
     {
-      name: 'Google Gemini 2.5 Flash',
+      name: 'Google Gemini 3.8 Flash',
       category: 'AI Clinical Engine',
       description: 'Powers conversational clinical intelligence, BIRP note summarisation, and SCHADS award compliance checks.',
       status: 'Connected',

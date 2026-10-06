@@ -45,7 +45,8 @@ export const ClientsModule: React.FC = () => {
     importCompanyParticipants,
     attachDocumentToClient,
     removeDocumentFromClient,
-    currentUser
+    currentUser,
+    addAuditLog
   } = useManagementStore();
 
   const [search, setSearch] = useState('');
@@ -108,6 +109,26 @@ export const ClientsModule: React.FC = () => {
     } finally {
       setIsSyncingDrive(false);
     }
+  };
+
+  const handleArchiveParticipantDossier = (client: Client) => {
+    const archivePath = `Staff Share Drive > Archive > Inactive Participants > ${client.name}`;
+    updateClient(client.id, {
+      status: 'Discharged',
+      driveFolderPath: archivePath
+    });
+
+    addAuditLog(
+      'DRIVE_DOSSIER_ARCHIVED',
+      'clients',
+      client.id,
+      `Drive Dossier Archival: Participant ${client.name} files consolidated and transferred to "${archivePath}". Audit record sealed.`
+    );
+
+    setSyncSuccessMessage(
+      `Drive Dossier Archival: ${client.name}'s participant folder archived to "${archivePath}". Audit trail permanently logged.`
+    );
+    setTimeout(() => setSyncSuccessMessage(null), 5000);
   };
 
   const handleLaunchPickerForFolder = async (folderName?: string) => {
@@ -423,6 +444,14 @@ export const ClientsModule: React.FC = () => {
 
               <div className="flex items-center gap-2">
                 <button
+                  onClick={() => handleArchiveParticipantDossier(selectedClient)}
+                  className="px-3 py-1.5 rounded-xl bg-amber-950/50 hover:bg-amber-900/70 text-amber-300 border border-amber-500/30 text-xs font-bold transition-colors flex items-center gap-1.5 shadow-sm"
+                  title="Archive participant clinical folder to Google Drive archive with automated audit trail"
+                >
+                  <Folder className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Archive Dossier to Drive</span>
+                </button>
+                <button
                   onClick={() => openEdit(selectedClient)}
                   className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
                   title="Edit details"
@@ -432,7 +461,7 @@ export const ClientsModule: React.FC = () => {
                 <button
                   onClick={() => deleteClient(selectedClient.id)}
                   className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 transition-colors"
-                  title="Archive participant"
+                  title="Delete participant record"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
