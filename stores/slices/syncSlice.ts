@@ -60,7 +60,7 @@ export const createSyncSlice: StateCreator<RootStore, [], [], SyncSlice> = (set,
   pendingChangesCount: 0,
   offlineQueue: [],
   lastSyncTime: new Date().toISOString(),
-  isUsingMockData: true,
+  isUsingMockData: false,
 
   setOnlineStatus: (isOnline: boolean) => {
     set((state) => {
@@ -237,6 +237,9 @@ export const createSyncSlice: StateCreator<RootStore, [], [], SyncSlice> = (set,
       billingClaims: [],
       scheduledShifts: [],
       selectedClientId: null
+    });
+    import('@/lib/firestoreService').then(({ purgeMockDataFromFirestore }) => {
+      purgeMockDataFromFirestore().catch((e) => console.warn('Purge mock data from firestore:', e));
     });
     get().addAuditLog(
       'WIPE_DEMO_DATABASE',
@@ -424,8 +427,22 @@ export const createSyncSlice: StateCreator<RootStore, [], [], SyncSlice> = (set,
         });
       } else {
         const seed = await import('@/lib/seedData');
+        // Filter out any leftover mock participants so the workspace is strictly production
+        const realClients = fetchedClients.filter(
+          (c) =>
+            !c.id.startsWith('cli-') &&
+            c.isCompanyDriveParticipant !== true &&
+            !c.id.startsWith('client-mock') &&
+            !['Ben Rusic', 'Milly Kane', 'Cooper Brooks', 'Reuben Turner', 'Reyansh Chawla'].includes(c.name)
+        );
+
+        if (realClients.length < fetchedClients.length) {
+          const { purgeMockDataFromFirestore } = await import('@/lib/firestoreService');
+          purgeMockDataFromFirestore().catch(() => {});
+        }
+
         set({
-          clients: fetchedClients.length > 0 ? fetchedClients : seed.INITIAL_CLIENTS,
+          clients: realClients,
           caseNotes: fetchedCaseNotes.length > 0 ? fetchedCaseNotes : seed.INITIAL_CASE_NOTES,
           billingClaims: fetchedClaims.length > 0 ? fetchedClaims : seed.INITIAL_CLAIMS,
           claims: fetchedClaims.length > 0 ? fetchedClaims : seed.INITIAL_CLAIMS,

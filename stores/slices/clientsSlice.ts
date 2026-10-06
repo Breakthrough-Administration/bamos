@@ -2,6 +2,7 @@ import { StateCreator } from 'zustand';
 import { Client, ClientGoal } from '@/types';
 import {
   createClient as createClientDoc,
+  createClientsBatch,
   updateClient as updateClientDoc,
   deleteClient as deleteClientDoc,
   updateCaseNote as updateCaseNoteDoc
@@ -439,6 +440,50 @@ export const createClientsSlice: StateCreator<RootStore, [], [], ClientsSlice> =
     ).catch(() => {});
 
     return COMPANY_DRIVE_PARTICIPANTS.length;
+  },
+
+  batchImportValidatedClients: async (newClients: Client[]) => {
+    try {
+      if (!newClients || newClients.length === 0) {
+        return { success: false, count: 0, error: 'No participants provided for import' };
+      }
+
+      // Persist all clients directly to Firestore collection
+      await createClientsBatch(newClients);
+
+      // Merge into local store state
+      const currentClients = get().clients;
+      const newIds = new Set(newClients.map((c) => c.id));
+      const filteredExisting = currentClients.filter((c) => !newIds.has(c.id));
+      const updatedClients = [...newClients, ...filteredExisting];
+
+      set({
+        clients: updatedClients,
+        selectedClientId: newClients[0]?.id || get().selectedClientId,
+        isUsingMockData: false
+      });
+
+      // Security Audit Trail
+      get().addAuditLog(
+        'IMPORT_BULK_PARTICIPANTS',
+        'DatabaseEngine',
+        `batch-${Date.now()}`,
+        `Successfully validated and committed batch of ${newClients.length} participants to Firestore database: ${newClients.map((c) => c.name).slice(0, 5).join(', ')}${newClients.length > 5 ? '...' : ''}`
+      );
+
+      // System notification
+      get().addNotification({
+        title: 'Bulk Participant Batch Committed',
+        message: `Successfully validated and committed ${newClients.length} participants directly to the Firestore collection.`,
+        type: 'client',
+        severity: 'low'
+      });
+
+      return { success: true, count: newClients.length };
+    } catch (err: any) {
+      console.error('Failed to commit batch to Firestore:', err);
+      return { success: false, count: 0, error: err?.message || 'Database commit failed' };
+    }
   },
 
   attachDocumentToClient: (clientId, document) => {

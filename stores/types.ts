@@ -84,6 +84,7 @@ export interface ClientsSlice {
   exportClientsCSV: () => string;
   generateParticipantTemplateCSV: () => string;
   importCompanyParticipants: () => Promise<number>;
+  batchImportValidatedClients: (clients: Client[]) => Promise<{ success: boolean; count: number; error?: string }>;
   attachDocumentToClient: (clientId: string, document: AttachedDocument) => void;
   removeDocumentFromClient: (clientId: string, documentId: string) => void;
 }

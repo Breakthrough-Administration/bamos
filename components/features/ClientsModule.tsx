@@ -6,6 +6,7 @@ import { Client, AttachedDocument } from '@/types';
 import { STANDARD_DRIVE_SUBFOLDERS } from '@/lib/seedData';
 import { openGoogleDrivePicker, PickedGoogleDriveFile } from '@/lib/googlePicker';
 import { GoogleDrivePreviewModal } from './GoogleDrivePreviewModal';
+import { BulkParticipantImporter } from './BulkParticipantImporter';
 import {
   Users,
   Search,
@@ -28,7 +29,8 @@ import {
   Sparkles,
   Download,
   Eye,
-  Check
+  Check,
+  FileSpreadsheet
 } from 'lucide-react';
 
 export const ClientsModule: React.FC = () => {
@@ -52,6 +54,7 @@ export const ClientsModule: React.FC = () => {
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [isSyncingDrive, setIsSyncingDrive] = useState(false);
   const [syncSuccessMessage, setSyncSuccessMessage] = useState<string | null>(null);
+  const [isBulkImporterOpen, setIsBulkImporterOpen] = useState(false);
 
   // Preview Modal state
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
@@ -202,6 +205,15 @@ export const ClientsModule: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            onClick={() => setIsBulkImporterOpen(true)}
+            className="px-4 py-2 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold transition-all shadow-lg shadow-teal-600/20 flex items-center gap-2"
+            title="Bulk import participants from CSV or Excel file with field mapping & error validation"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            <span>Bulk Import (CSV/Excel)</span>
+          </button>
+
           <button
             onClick={handleSyncCompanyParticipants}
             disabled={isSyncingDrive}
@@ -571,7 +583,7 @@ export const ClientsModule: React.FC = () => {
                   <Phone className="w-3 h-3 text-teal-400" /> Phone
                 </span>
                 <p className="text-xs text-white font-medium">
-                  {selectedClient.contactNumber || selectedClient.emergencyContact?.phone || '0412 901 882'}
+                  {selectedClient.contactNumber || selectedClient.emergencyContact?.phone || 'Not provided'}
                 </p>
               </div>
 
@@ -779,6 +791,21 @@ export const ClientsModule: React.FC = () => {
           document={previewDoc}
           initialClientId={selectedClient?.id}
         />
+      )}
+
+      {/* Bulk Participant Importer Modal */}
+      {isBulkImporterOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="max-w-6xl w-full my-8">
+            <BulkParticipantImporter
+              isOpen={isBulkImporterOpen}
+              onClose={() => setIsBulkImporterOpen(false)}
+              onSuccessNavigate={() => {
+                setIsBulkImporterOpen(false);
+              }}
+            />
+          </div>
+        </div>
       )}
     </div>
   );

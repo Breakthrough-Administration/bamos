@@ -16,29 +16,30 @@ import { PWAInstallPrompt } from '@/components/PWAInstallPrompt';
 import { OfflineToast } from '@/components/OfflineToast';
 import { BiometricSecurityOverlay } from '@/components/BiometricSecurityOverlay';
 
-// Phase 7.2: Lazy-loaded feature modules for high-performance route code-splitting
-const CommandCenter = lazy(() => import('@/components/features/CommandCenter').then(m => ({ default: m.CommandCenter })));
-const ClientsModule = lazy(() => import('@/components/features/ClientsModule').then(m => ({ default: m.ClientsModule })));
-const NDISGoalTracker = lazy(() => import('@/components/features/NDISGoalTracker').then(m => ({ default: m.NDISGoalTracker })));
-const GoogleMapsView = lazy(() => import('@/components/features/GoogleMapsView').then(m => ({ default: m.GoogleMapsView })));
-const CaseNotesModule = lazy(() => import('@/components/features/CaseNotesModule').then(m => ({ default: m.CaseNotesModule })));
-const IncidentsModule = lazy(() => import('@/components/features/IncidentsModule').then(m => ({ default: m.IncidentsModule })));
-const RestrictivePracticesModule = lazy(() => import('@/components/features/RestrictivePracticesModule').then(m => ({ default: m.RestrictivePracticesModule })));
-const ABCAnalyserModule = lazy(() => import('@/components/features/ABCAnalyserModule').then(m => ({ default: m.ABCAnalyserModule })));
-const BSPModule = lazy(() => import('@/components/features/BSPModule').then(m => ({ default: m.BSPModule })));
-const PracticeToolsModule = lazy(() => import('@/components/features/PracticeToolsModule').then(m => ({ default: m.PracticeToolsModule })));
-const GoogleWorkspaceHub = lazy(() => import('@/components/features/GoogleWorkspaceHub').then(m => ({ default: m.GoogleWorkspaceHub })));
-const GoogleKeepModule = lazy(() => import('@/components/features/GoogleKeepModule').then(m => ({ default: m.GoogleKeepModule })));
-const GoogleClassroomModule = lazy(() => import('@/components/features/GoogleClassroomModule').then(m => ({ default: m.GoogleClassroomModule })));
-const ComplianceDashboard = lazy(() => import('@/components/features/ComplianceDashboard').then(m => ({ default: m.ComplianceDashboard })));
-const CRMModule = lazy(() => import('@/components/features/CRMModule').then(m => ({ default: m.CRMModule })));
-const BillingModule = lazy(() => import('@/components/features/BillingModule').then(m => ({ default: m.BillingModule })));
-const HRModule = lazy(() => import('@/components/features/HRModule').then(m => ({ default: m.HRModule })));
-const AuditLogsModule = lazy(() => import('@/components/features/AuditLogsModule').then(m => ({ default: m.AuditLogsModule })));
-const SecurityAuditModule = lazy(() => import('@/components/features/SecurityAuditModule').then(m => ({ default: m.SecurityAuditModule })));
-const IntegrationsModule = lazy(() => import('@/components/features/IntegrationsModule').then(m => ({ default: m.IntegrationsModule })));
-const ParticipantPortalView = lazy(() => import('@/components/features/ParticipantPortalView').then(m => ({ default: m.ParticipantPortalView })));
-const AIPredictiveInsights = lazy(() => import('@/components/features/AIPredictiveInsights').then(m => ({ default: m.AIPredictiveInsights })));
+import {
+  CommandCenter,
+  ClientsModule,
+  NDISGoalTracker,
+  GoogleMapsView,
+  CaseNotesModule,
+  IncidentsModule,
+  RestrictivePracticesModule,
+  ABCAnalyserModule,
+  BSPModule,
+  PracticeToolsModule,
+  GoogleWorkspaceHub,
+  GoogleKeepModule,
+  GoogleClassroomModule,
+  ComplianceDashboard,
+  CRMModule,
+  BillingModule,
+  HRModule,
+  AuditLogsModule,
+  SecurityAuditModule,
+  IntegrationsModule,
+  ParticipantPortalView,
+  AIPredictiveInsights,
+} from '@/components/features';
 
 const ModuleLoadingFallback = ({ title }: { title: string }) => (
   <div className="flex flex-col items-center justify-center min-h-[360px] py-16 space-y-4 rounded-2xl bg-slate-900/30 border border-slate-800/50">

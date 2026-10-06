@@ -547,6 +547,9 @@ export type DocumentCategory =
   | 'Billing Receipt'
   | 'BSP Document'
   | 'Clinical Report'
+  | 'Invoicing & Claims'
+  | 'Service Agreement'
+  | 'Legal Document'
   | 'Other';
 
 export type AllowedMimeType =

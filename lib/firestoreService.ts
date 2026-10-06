@@ -112,6 +112,19 @@ export const subscribeToClients = (
   onError?: (err: Error) => void
 ) => subscribeToCollection<Client>('clients', onUpdate, onError);
 
+export async function createClientsBatch(clients: Client[]): Promise<void> {
+  const batchSize = 400;
+  for (let i = 0; i < clients.length; i += batchSize) {
+    const chunk = clients.slice(i, i + batchSize);
+    const batch = writeBatch(db);
+    for (const client of chunk) {
+      const docRef = doc(db, 'clients', client.id);
+      batch.set(docRef, client, { merge: true });
+    }
+    await batch.commit();
+  }
+}
+
 // Case Notes
 export const fetchCaseNotes = () => getCollectionDocs<CaseNote>('caseNotes');
 export const createCaseNote = (data: CaseNote) => setDocumentData<CaseNote>('caseNotes', data);
@@ -769,22 +782,58 @@ export const createDocument = setDocumentData;
 export const updateDocument = updateDocumentData;
 export const deleteDocument = deleteDocumentData;
 
-// Seed Initial Data
+// Purge any mock participants from Firestore to ensure production cleanliness
+export async function purgeMockDataFromFirestore(): Promise<void> {
+  try {
+    const clientsCol = collection(db, 'clients');
+    const snapshot = await getDocs(clientsCol);
+    const mockDocIds: string[] = [];
+    snapshot.forEach((d) => {
+      const data = d.data();
+      if (
+        d.id.startsWith('cli-') ||
+        data.isCompanyDriveParticipant === true ||
+        d.id.startsWith('client-mock') ||
+        ['Ben Rusic', 'Milly Kane', 'Cooper Brooks', 'Reuben Turner', 'Reyansh Chawla'].includes(data.name)
+      ) {
+        mockDocIds.push(d.id);
+      }
+    });
+
+    if (mockDocIds.length > 0) {
+      const batch = writeBatch(db);
+      mockDocIds.forEach((id) => {
+        batch.delete(doc(db, 'clients', id));
+      });
+      await batch.commit();
+      console.info(`Successfully purged ${mockDocIds.length} mock participants from Firestore`);
+    }
+  } catch (err) {
+    console.warn('Could not purge mock documents from Firestore:', err);
+  }
+}
+
+// Seed Initial Data (only seeds official price guides or non-empty collections)
 export async function seedInitialFirestoreDataIfEmpty(seedData: Record<string, any[]>): Promise<void> {
   try {
     const batch = writeBatch(db);
+    let count = 0;
     for (const [collectionName, items] of Object.entries(seedData)) {
-      if (Array.isArray(items)) {
+      if (Array.isArray(items) && items.length > 0) {
         for (const item of items.slice(0, 50)) {
           const id = item.id || `${collectionName}-${Math.random().toString(36).substring(2, 8)}`;
           const docRef = doc(db, collectionName, id);
           batch.set(docRef, item, { merge: true });
+          count++;
         }
       }
     }
-    await batch.commit();
-    console.info('Successfully populated initial Firestore seed documents');
+    if (count > 0) {
+      await batch.commit();
+      console.info('Successfully populated initial Firestore system documents');
+    }
   } catch (err) {
     console.warn('Firestore seeding skipped or restricted by security rules:', err);
   }
 }
+

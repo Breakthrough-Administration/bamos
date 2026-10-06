@@ -23,6 +23,8 @@ import {
 } from 'lucide-react';
 import { GoogleDrivePickerWidget } from './GoogleDrivePickerWidget';
 import { GoogleDrivePreviewModal } from './GoogleDrivePreviewModal';
+import { FolderSyncManager } from './FolderSyncManager';
+import { StartupHealthBanner } from './StartupHealthBanner';
 import { WorkspaceSearchInsights } from './WorkspaceSearchInsights';
 import { WorkspaceFileTypeDistribution } from './WorkspaceFileTypeDistribution';
 import {
@@ -322,6 +324,9 @@ export const GoogleWorkspaceHub: React.FC = () => {
           </span>
         </div>
       </div>
+
+      {/* Automated Startup Health Check & Credentials Validator */}
+      <StartupHealthBanner />
 
       {/* Integration Status Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -691,6 +696,9 @@ export const GoogleWorkspaceHub: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Recursive Folder Sync Manager & Batch Import Status Dashboard */}
+      <FolderSyncManager />
 
       {/* Interactive Google Drive Picker & Document Registry */}
       <GoogleDrivePickerWidget />

@@ -9,12 +9,14 @@ import { getCachedGoogleAccessToken, signInWithGoogle } from './firebase';
 export interface PickedGoogleDriveFile {
   id: string;
   name: string;
+  path?: string;
   mimeType: string;
   url: string;
   iconUrl?: string;
   sizeBytes?: number;
   lastEditedUtc?: number;
   description?: string;
+  isFolder?: boolean;
 }
 
 export interface PickerResponseData {
@@ -192,7 +194,7 @@ export async function clearCachedGoogleToken(): Promise<void> {
   setCachedGoogleAccessToken(null);
 }
 
-export type PickerLoadingPhase = 'idle' | 'loading_api' | 'requesting_auth' | 'opening_picker';
+export type PickerLoadingPhase = 'idle' | 'loading_api' | 'requesting_auth' | 'opening_picker' | 'expanding_folders';
 
 export interface OpenGooglePickerOptions {
   title?: string;
@@ -207,13 +209,85 @@ export interface OpenGooglePickerOptions {
 }
 
 /**
+ * Recursively fetches all child files and subfolders within a picked Google Drive folder
+ * using Google Drive v3 REST API with the active OAuth access token.
+ */
+export async function expandGoogleDriveFolderRecursively(
+  folderId: string,
+  folderPath: string,
+  accessToken: string
+): Promise<PickedGoogleDriveFile[]> {
+  const resultFiles: PickedGoogleDriveFile[] = [];
+
+  async function fetchChildren(parentFolderId: string, currentPath: string): Promise<void> {
+    try {
+      let pageToken: string | undefined = undefined;
+      do {
+        const queryParams = new URLSearchParams({
+          q: `'${parentFolderId}' in parents and trashed = false`,
+          fields: 'nextPageToken, files(id, name, mimeType, size, webViewLink, iconLink, modifiedTime, description)',
+          pageSize: '100',
+          supportsAllDrives: 'true',
+          includeItemsFromAllDrives: 'true',
+        });
+        if (pageToken) {
+          queryParams.set('pageToken', pageToken);
+        }
+
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files?${queryParams.toString()}`, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: 'application/json',
+          },
+        });
+
+        if (!res.ok) {
+          console.warn(`Failed to list children for Google Drive folder ${parentFolderId}:`, res.statusText);
+          break;
+        }
+
+        const data = await res.json();
+        const files = data.files || [];
+
+        for (const f of files) {
+          const relativePath = currentPath ? `${currentPath}/${f.name}` : f.name;
+          if (f.mimeType === 'application/vnd.google-apps.folder') {
+            await fetchChildren(f.id, relativePath);
+          } else {
+            resultFiles.push({
+              id: f.id,
+              name: f.name,
+              path: relativePath,
+              mimeType: f.mimeType,
+              url: f.webViewLink || `https://drive.google.com/file/d/${f.id}/view`,
+              iconUrl: f.iconLink,
+              sizeBytes: f.size ? parseInt(f.size, 10) : 102400,
+              lastEditedUtc: f.modifiedTime ? new Date(f.modifiedTime).getTime() : undefined,
+              description: f.description,
+              isFolder: false,
+            });
+          }
+        }
+
+        pageToken = data.nextPageToken;
+      } while (pageToken);
+    } catch (err) {
+      console.warn('Error expanding Google Drive folder:', err);
+    }
+  }
+
+  await fetchChildren(folderId, folderPath);
+  return resultFiles;
+}
+
+/**
  * Launches the Google Drive Picker modal adhering strictly to iframe origin constraints
  */
 export async function openGoogleDrivePicker(options: OpenGooglePickerOptions): Promise<void> {
   const {
-    title = 'Select Clinical Document from Google Drive',
+    title = 'Select Clinical Document or Folder from Google Drive',
     query,
-    multiSelect = false,
+    multiSelect = true,
     mimeFilter,
     forceFreshAuth = false,
     onLoadingStateChange,
@@ -246,34 +320,73 @@ export async function openGoogleDrivePicker(options: OpenGooglePickerOptions): P
 
     // Primary Google Docs / Drive View with search query and filter support
     let docsView: GoogleDocsViewInstance | string = window.google.picker.ViewId.DOCS;
-    if ((mimeFilter || query) && window.google.picker.DocsView) {
+    if (window.google.picker.DocsView) {
       const customView = new window.google.picker.DocsView(window.google.picker.ViewId.DOCS);
       if (mimeFilter) customView.setMimeTypes(mimeFilter);
       if (query && query.trim()) customView.setQuery(query.trim());
       customView.setIncludeFolders(true);
+      customView.setSelectFolderEnabled(true);
       docsView = customView;
     }
 
+    pickerBuilder.addView(docsView);
+
+    // Dedicated Folders View so users can select entire directories from Google Drive
+    if (window.google.picker.DocsView && window.google.picker.ViewId.FOLDERS) {
+      const folderView = new window.google.picker.DocsView(window.google.picker.ViewId.FOLDERS);
+      folderView.setSelectFolderEnabled(true);
+      folderView.setIncludeFolders(true);
+      pickerBuilder.addView(folderView);
+    }
+
     pickerBuilder
-      .addView(docsView)
       .setOAuthToken(token)
       .setOrigin(pickerOrigin)
       .setTitle(title)
-      .setCallback((data: PickerResponseData) => {
+      .setCallback(async (data: PickerResponseData) => {
         if (data.action === window.google?.picker?.Action.PICKED) {
-          if (onLoadingStateChange) onLoadingStateChange('idle');
           const rawDocs = data.docs || [];
-          const mappedFiles: PickedGoogleDriveFile[] = rawDocs.map((doc) => ({
-            id: doc.id,
-            name: doc.name,
-            mimeType: doc.mimeType,
-            url: doc.url || `https://drive.google.com/file/d/${doc.id}/view`,
-            iconUrl: doc.iconUrl,
-            sizeBytes: doc.sizeBytes,
-            lastEditedUtc: doc.lastEditedUtc,
-            description: doc.description
-          }));
-          onPicked(mappedFiles);
+          const directFiles: PickedGoogleDriveFile[] = [];
+          const foldersToExpand: Array<{ id: string; name: string }> = [];
+
+          for (const doc of rawDocs) {
+            if (doc.mimeType === 'application/vnd.google-apps.folder') {
+              foldersToExpand.push({ id: doc.id, name: doc.name });
+            } else {
+              directFiles.push({
+                id: doc.id,
+                name: doc.name,
+                path: doc.name,
+                mimeType: doc.mimeType,
+                url: doc.url || `https://drive.google.com/file/d/${doc.id}/view`,
+                iconUrl: doc.iconUrl,
+                sizeBytes: doc.sizeBytes,
+                lastEditedUtc: doc.lastEditedUtc,
+                description: doc.description,
+                isFolder: false,
+              });
+            }
+          }
+
+          if (foldersToExpand.length > 0) {
+            if (onLoadingStateChange) onLoadingStateChange('expanding_folders');
+            try {
+              const expandedPromises = foldersToExpand.map((f) =>
+                expandGoogleDriveFolderRecursively(f.id, f.name, token)
+              );
+              const expandedGroups = await Promise.all(expandedPromises);
+              const allExpanded = expandedGroups.flat();
+              if (onLoadingStateChange) onLoadingStateChange('idle');
+              onPicked([...directFiles, ...allExpanded]);
+            } catch (err) {
+              console.warn('Failed expanding some folders from Drive:', err);
+              if (onLoadingStateChange) onLoadingStateChange('idle');
+              onPicked(directFiles);
+            }
+          } else {
+            if (onLoadingStateChange) onLoadingStateChange('idle');
+            onPicked(directFiles);
+          }
         } else if (data.action === window.google?.picker?.Action.CANCEL) {
           if (onLoadingStateChange) onLoadingStateChange('idle');
           if (onCancel) onCancel('user_closed_picker');

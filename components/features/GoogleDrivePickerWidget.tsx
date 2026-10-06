@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   HardDrive,
   FileText,
@@ -20,7 +20,16 @@ import {
   ShieldAlert,
   RotateCw,
   X,
-  Database
+  Database,
+  FolderUp,
+  Files,
+  FolderOpen,
+  Sparkles,
+  ArrowRight,
+  ShieldCheck,
+  UploadCloud,
+  Layers,
+  Check
 } from 'lucide-react';
 import {
   openGoogleDrivePicker,
@@ -29,106 +38,51 @@ import {
   clearCachedGoogleToken
 } from '@/lib/googlePicker';
 import { useManagementStore } from '@/stores/useManagementStore';
-import { AttachedDocument, DocumentCategory } from '@/types';
+import { AttachedDocument, DocumentCategory, Client } from '@/types';
+import { STANDARD_DRIVE_SUBFOLDERS } from '@/lib/seedData';
 import { GoogleDrivePreviewModal } from './GoogleDrivePreviewModal';
 import {
   storePickedDriveFileMetadata,
   unlinkDocumentFromClient,
   fetchDocuments
 } from '@/lib/firestoreService';
+import {
+  readDroppedItemsRecursively,
+  assessDocumentLocally,
+  assessDocumentWithAI,
+  commitDocumentAssessment,
+  DocumentAssessment,
+  DroppedDocumentItem
+} from '@/services/documentAssessmentService';
 
 interface LinkedDriveDocument extends AttachedDocument {
   clientId?: string;
   clientName?: string;
   driveFileId: string;
   category: DocumentCategory;
+  subfolder?: string;
 }
 
-const INITIAL_LINKED_DOCS: LinkedDriveDocument[] = [
-  {
-    id: 'gdoc-1',
-    driveFileId: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms',
-    name: 'Sarah Jenkins - NDIS Plan 2026-2027 (Official NDIA).pdf',
-    url: 'https://drive.google.com/file/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/view',
-    mimeType: 'application/pdf',
-    sizeBytes: 1845200,
-    uploadedBy: 'user-practitioner-1',
-    uploadedByName: 'Marcus Vance',
-    uploadedAt: new Date(Date.now() - 2 * 3600000).toISOString(),
-    clientId: 'cli-001',
-    clientName: 'Sarah Jenkins',
-    category: 'NDIS Plan Document',
-    tags: ['Clinical', 'Financial'],
-    caseNoteId: 'note-001'
-  },
-  {
-    id: 'gdoc-2',
-    driveFileId: '1gJ_4s9jE24YfU8Qz7B0xP9aT1LmN3kRt',
-    name: 'Michael Chang - Comprehensive Functional Behaviour Assessment (PBS Level 3).docx',
-    url: 'https://drive.google.com/file/d/1gJ_4s9jE24YfU8Qz7B0xP9aT1LmN3kRt/view',
-    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    sizeBytes: 945000,
-    uploadedBy: 'user-practitioner-1',
-    uploadedByName: 'Marcus Vance',
-    uploadedAt: new Date(Date.now() - 14 * 3600000).toISOString(),
-    clientId: 'cli-002',
-    clientName: 'Michael Chang',
-    category: 'Assessment PDF',
-    tags: ['Clinical', 'Behavioural'],
-    caseNoteId: 'note-002'
-  },
-  {
-    id: 'gdoc-3',
-    driveFileId: '1zK_9v8wY32xM7aP5qL1nS8tR4cD2bF0',
-    name: 'Chloe Tremblay - Royal Children Hospital OT Sensory Assessment.pdf',
-    url: 'https://drive.google.com/file/d/1zK_9v8wY32xM7aP5qL1nS8tR4cD2bF0/view',
-    mimeType: 'application/pdf',
-    sizeBytes: 3120000,
-    uploadedBy: 'user-admin-1',
-    uploadedByName: 'Elena Rostova',
-    uploadedAt: new Date(Date.now() - 26 * 3600000).toISOString(),
-    clientId: 'cli-003',
-    clientName: 'Chloe Tremblay',
-    category: 'Clinical Report',
-    tags: ['Clinical', 'Medical']
-  },
-  {
-    id: 'gdoc-4',
-    driveFileId: '1mQ_2k4nP89rT5uW3vX7yZ0aB1cD2eF3',
-    name: 'Liam O\'Connor - Allied Health Consent and Service Agreement 2026.pdf',
-    url: 'https://drive.google.com/file/d/1mQ_2k4nP89rT5uW3vX7yZ0aB1cD2eF3/view',
-    mimeType: 'application/pdf',
-    sizeBytes: 780000,
-    uploadedBy: 'user-practitioner-1',
-    uploadedByName: 'Marcus Vance',
-    uploadedAt: new Date(Date.now() - 48 * 3600000).toISOString(),
-    clientId: 'cli-004',
-    clientName: 'Liam O\'Connor',
-    category: 'Consent Form',
-    tags: ['Legal', 'Compliance']
-  },
-  {
-    id: 'gdoc-5',
-    driveFileId: '1pL_5w8xY21aM9bC7dE3fG4hI6jK8mN0',
-    name: 'Sarah Jenkins - Hydrotherapy & Physiotherapy Biomechanical Progress Report.pdf',
-    url: 'https://drive.google.com/file/d/1pL_5w8xY21aM9bC7dE3fG4hI6jK8mN0/view',
-    mimeType: 'application/pdf',
-    sizeBytes: 2450000,
-    uploadedBy: 'user-practitioner-1',
-    uploadedByName: 'Marcus Vance',
-    uploadedAt: new Date(Date.now() - 72 * 3600000).toISOString(),
-    clientId: 'cli-001',
-    clientName: 'Sarah Jenkins',
-    category: 'Clinical Report',
-    tags: ['Clinical', 'NDIS Plan']
+const getFileIcon = (mimeType: string, fileName: string) => {
+  const ext = fileName.split('.').pop()?.toLowerCase() || '';
+  if (mimeType.includes('pdf') || ext === 'pdf') {
+    return <FileText className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />;
   }
-];
+  if (mimeType.includes('sheet') || ext === 'xlsx' || ext === 'xls' || ext === 'csv') {
+    return <FileSpreadsheet className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />;
+  }
+  if (mimeType.includes('image') || ['png', 'jpg', 'jpeg', 'webp', 'tiff'].includes(ext)) {
+    return <FileCheck className="w-4 h-4 text-sky-400 flex-shrink-0 mt-0.5" />;
+  }
+  return <FileText className="w-4 h-4 text-teal-400 flex-shrink-0 mt-0.5" />;
+};
 
 export const GoogleDrivePickerWidget: React.FC = () => {
-  const { clients, caseNotes, updateClient, addAuditLog, addNotification, currentUser } =
+  const { clients, caseNotes, updateClient, addClient, addAuditLog, addNotification, currentUser } =
     useManagementStore();
 
-  const [linkedDocs, setLinkedDocs] = useState<LinkedDriveDocument[]>(INITIAL_LINKED_DOCS);
+  // No mock data: start with empty list and populate exclusively from real Firestore documents
+  const [linkedDocs, setLinkedDocs] = useState<LinkedDriveDocument[]>([]);
   const [loadingPhase, setLoadingPhase] = useState<PickerLoadingPhase>('idle');
   const [pickerError, setPickerError] = useState<string | null>(null);
   const [authExpiredNotice, setAuthExpiredNotice] = useState<string | null>(null);
@@ -138,13 +92,25 @@ export const GoogleDrivePickerWidget: React.FC = () => {
   const [documentCategory, setDocumentCategory] = useState<DocumentCategory>('NDIS Plan Document');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('ALL');
+  const [filterParticipant, setFilterParticipant] = useState('ALL');
+
+  // Multi-File & Folder Drop Assessment Queue
+  const [assessmentQueue, setAssessmentQueue] = useState<DocumentAssessment[]>([]);
+  const [isAssessing, setIsAssessing] = useState<boolean>(false);
+  const [isCommittingQueue, setIsCommittingQueue] = useState<boolean>(false);
+  const [commitProgress, setCommitProgress] = useState<number>(0);
+  const [isDraggingOver, setIsDraggingOver] = useState<boolean>(false);
+
+  // Hidden Inputs for Folder and Files
+  const folderInputRef = useRef<HTMLInputElement>(null);
+  const filesInputRef = useRef<HTMLInputElement>(null);
 
   // Preview Modal state
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
   const [previewDocument, setPreviewDocument] = useState<AttachedDocument | PickedGoogleDriveFile | null>(null);
   const [previewClientId, setPreviewClientId] = useState<string>(selectedClientId);
 
-  // Sync with Firestore on mount to populate existing documents
+  // Sync real documents from Firestore on mount
   useEffect(() => {
     let isMounted = true;
     fetchDocuments()
@@ -157,14 +123,15 @@ export const GoogleDrivePickerWidget: React.FC = () => {
             map.set(fd.id, {
               ...fd,
               driveFileId: fd.driveFileId || (fd.metadata?.driveFileId as string) || fd.id,
-              category: (fd.category as DocumentCategory) || 'NDIS Plan Document'
+              category: (fd.category as DocumentCategory) || 'NDIS Plan Document',
+              subfolder: fd.tags?.[0] || 'Assessments/ Reports'
             });
           });
           return Array.from(map.values());
         });
       })
       .catch((err) => {
-        console.warn('Could not fetch initial documents from Firestore:', err);
+        console.warn('Could not fetch documents from Firestore:', err);
       });
 
     return () => {
@@ -172,6 +139,112 @@ export const GoogleDrivePickerWidget: React.FC = () => {
     };
   }, []);
 
+  // Update selectedClientId default if clients change
+  useEffect(() => {
+    if (!selectedClientId && clients.length > 0) {
+      setSelectedClientId(clients[0].id);
+    }
+  }, [clients, selectedClientId]);
+
+  // Process dropped/selected items into the assessment queue
+  const processItemsIntoQueue = async (droppedItems: DroppedDocumentItem[]) => {
+    if (droppedItems.length === 0) return;
+
+    setIsAssessing(true);
+    const defaultClient = clients.find((c) => c.id === selectedClientId) || null;
+
+    const newAssessments: DocumentAssessment[] = [];
+    for (const item of droppedItems) {
+      // Assess locally and with AI
+      const assessed = await assessDocumentWithAI(item, clients, defaultClient);
+      newAssessments.push(assessed);
+    }
+
+    setAssessmentQueue((prev) => [...prev, ...newAssessments]);
+    setIsAssessing(false);
+
+    addNotification({
+      title: 'Documents Assessed by Intelligent Router',
+      message: `${newAssessments.length} document(s) categorized into participant folders with extracted NDIS updates.`,
+      type: 'compliance',
+      severity: 'low'
+    });
+  };
+
+  // Drag and Drop Event Handlers supporting Entire Folders Recursively
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+
+    try {
+      const items = await readDroppedItemsRecursively(e.dataTransfer);
+      if (items.length > 0) {
+        await processItemsIntoQueue(items);
+      }
+    } catch (err) {
+      console.error('Failed to read dropped directory structure:', err);
+      setPickerError('Failed to read folder contents. Please try selecting the folder via Browse Folder.');
+    }
+  };
+
+  // Handle native folder browse input
+  const handleFolderInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const items: DroppedDocumentItem[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      items.push({
+        id: `doc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        file: f,
+        name: f.name,
+        path: (f as any).webkitRelativePath || f.name,
+        mimeType: f.type || 'application/octet-stream',
+        sizeBytes: f.size
+      });
+    }
+
+    await processItemsIntoQueue(items);
+    e.target.value = '';
+  };
+
+  // Handle multiple files browse input
+  const handleFilesInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const items: DroppedDocumentItem[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      items.push({
+        id: `doc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        file: f,
+        name: f.name,
+        path: f.name,
+        mimeType: f.type || 'application/octet-stream',
+        sizeBytes: f.size
+      });
+    }
+
+    await processItemsIntoQueue(items);
+    e.target.value = '';
+  };
+
+  // Google Drive Picker trigger
   const handleOpenPicker = async (forceFreshAuth = false) => {
     setLoadingPhase('loading_api');
     setPickerError(null);
@@ -192,512 +265,692 @@ export const GoogleDrivePickerWidget: React.FC = () => {
           setLoadingPhase('idle');
           if (!pickedFiles || pickedFiles.length === 0) return;
 
-          try {
-            const newlyStored: LinkedDriveDocument[] = [];
+          // Convert picked Drive files into assessment items
+          const items: DroppedDocumentItem[] = pickedFiles.map((pf) => ({
+            id: pf.id,
+            name: pf.name,
+            path: pf.name,
+            mimeType: pf.mimeType,
+            sizeBytes: pf.sizeBytes || 102400,
+            googleDriveId: pf.id,
+            googleDriveUrl: pf.url
+          }));
 
-            // Securely store each picked file in Firestore service layer
-            for (const file of pickedFiles) {
-              const storedDoc = await storePickedDriveFileMetadata({
-                file,
-                clientId: targetClient?.id || '',
-                clientName: targetClient?.name,
-                category: documentCategory,
-                uploadedBy: currentUser?.id || 'practitioner-current',
-                uploadedByName: currentUser?.name || 'Practitioner'
-              });
-
-              const linkedEntry: LinkedDriveDocument = {
-                ...storedDoc,
-                driveFileId: file.id,
-                category: documentCategory
-              };
-
-              newlyStored.push(linkedEntry);
-            }
-
-            // Update local widget list
-            setLinkedDocs((prev) => [...newlyStored, ...prev]);
-
-            // Update client in store
-            if (targetClient) {
-              const existingAttached = targetClient.attachedDocuments || targetClient.documents || [];
-              const updatedDocs = [...newlyStored, ...existingAttached];
-              updateClient(targetClient.id, {
-                attachedDocuments: updatedDocs,
-                documents: updatedDocs
-              });
-            }
-
-            pickedFiles.forEach((file) => {
-              addAuditLog(
-                'GOOGLE_PICKER_IMPORT',
-                'GoogleDriveFile',
-                file.id,
-                `Stored metadata in Firestore & attached Drive document "${file.name}" to ${
-                  targetClient ? targetClient.name : 'Clinical Gateway'
-                }`
-              );
-            });
-
-            addNotification({
-              title: 'Google Drive Files Secured in Firestore',
-              message: `Successfully connected and stored ${pickedFiles.length} document(s) from Google Drive${
-                targetClient ? ` for ${targetClient.name}` : ''
-              }.`,
-              type: 'clinical',
-              severity: 'low'
-            });
-
-            // Automatically open preview modal on the first file for clinician verification
-            if (newlyStored.length > 0) {
-              setPreviewDocument(newlyStored[0]);
-              setPreviewClientId(targetClient?.id || selectedClientId);
-              setPreviewModalOpen(true);
-            }
-          } catch (storageErr: any) {
-            console.error('Failed to store picked file in Firestore:', storageErr);
-            setPickerError(storageErr?.message || 'Failed to save document metadata in Firestore.');
-          }
+          await processItemsIntoQueue(items);
         },
-        onCancel: (reason) => {
+        onCancel: () => {
           setLoadingPhase('idle');
-          if (reason === 'user_cancelled_auth') {
-            setCancellationNotice('Google sign-in was closed before authorization was granted.');
-          } else {
-            setCancellationNotice('Picker closed: No documents selected. Your workspace remains unchanged.');
-          }
+          setCancellationNotice('Drive file selection was cancelled.');
         },
-        onError: (err, details) => {
+        onError: (err: Error) => {
           setLoadingPhase('idle');
-          if (details.isUserCancelled) {
-            setCancellationNotice('Google authorization popup was closed.');
-            return;
-          }
-
-          if (details.isAuthExpired) {
-            setAuthExpiredNotice(
-              'Google Workspace authorization has expired or requires additional clinical Drive scopes. Please re-authenticate below.'
-            );
-          } else {
-            setPickerError(err.message || 'An unexpected error occurred while launching Google Picker.');
-          }
+          setPickerError(err.message || 'Google Drive Picker error');
         }
       });
     } catch (err: any) {
       setLoadingPhase('idle');
-      console.warn('Picker error caught:', err);
-      setPickerError(err?.message || 'Could not launch Google Drive Picker.');
+      setPickerError(err?.message || 'Failed to initialize Google Drive Picker');
     }
   };
 
-  const handleReauthorizeAndReopen = async () => {
-    await clearCachedGoogleToken();
-    setAuthExpiredNotice(null);
-    handleOpenPicker(true);
+  // Commit all assessed documents in the queue to their respective participant folders & Firestore
+  const handleCommitAssessmentQueue = async () => {
+    if (assessmentQueue.length === 0) return;
+
+    setIsCommittingQueue(true);
+    setCommitProgress(10);
+
+    const newlyCreatedDocs: LinkedDriveDocument[] = [];
+    let processed = 0;
+
+    for (const assessment of assessmentQueue) {
+      const res = await commitDocumentAssessment(assessment, clients, currentUser);
+      if (res.success && res.updatedParticipant) {
+        if (res.isNew) {
+          addClient(res.updatedParticipant);
+        } else {
+          updateClient(res.updatedParticipant.id, res.updatedParticipant);
+        }
+
+        // Record for linked documents table
+        const docEntry: LinkedDriveDocument = {
+          id: assessment.id,
+          driveFileId: assessment.googleDriveId || assessment.id,
+          name: assessment.fileName,
+          url: assessment.googleDriveUrl || `https://drive.google.com/file/d/${assessment.id}/view`,
+          mimeType: assessment.mimeType,
+          sizeBytes: assessment.sizeBytes,
+          uploadedBy: currentUser?.id || 'staff-system',
+          uploadedByName: currentUser?.name || 'Practitioner',
+          uploadedAt: new Date().toISOString(),
+          clientId: res.updatedParticipant.id,
+          clientName: res.updatedParticipant.name,
+          category: assessment.category,
+          subfolder: assessment.targetSubfolder,
+          tags: [assessment.targetSubfolder, 'Drive Sync', 'AI Assessed']
+        };
+        newlyCreatedDocs.push(docEntry);
+      }
+
+      processed++;
+      setCommitProgress(Math.round((processed / assessmentQueue.length) * 100));
+    }
+
+    setLinkedDocs((prev) => [...newlyCreatedDocs, ...prev]);
+    setAssessmentQueue([]);
+    setIsCommittingQueue(false);
+    setCommitProgress(0);
+
+    addAuditLog(
+      'FOLDER_BATCH_ASSESSED_AND_ROUTED',
+      'GoogleDriveService',
+      'batch-docs',
+      `Assessed and routed ${newlyCreatedDocs.length} files into participant folders with clinical metadata synchronization.`
+    );
+
+    addNotification({
+      title: 'Documents Routed to Participant Folders',
+      message: `Successfully routed ${newlyCreatedDocs.length} documents into NDIS participant folders and updated records in Firestore.`,
+      type: 'clinical',
+      severity: 'low'
+    });
   };
 
-  const handleOpenPreview = (doc: LinkedDriveDocument) => {
-    setPreviewDocument(doc);
-    setPreviewClientId(doc.clientId || selectedClientId);
-    setPreviewModalOpen(true);
+  // Remove single item from assessment queue
+  const handleRemoveQueueItem = (id: string) => {
+    setAssessmentQueue((prev) => prev.filter((item) => item.id !== id));
   };
 
-  const handleRemoveDoc = async (id: string, name: string, clientId?: string) => {
+  // Modify target participant for item in queue
+  const handleUpdateQueueParticipant = (id: string, participantVal: string) => {
+    if (participantVal.startsWith('new:')) {
+      const newName = participantVal.replace('new:', '').trim();
+      setAssessmentQueue((prev) =>
+        prev.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                targetParticipantId: '',
+                targetParticipantName: newName,
+                suggestedNewParticipant: true
+              }
+            : item
+        )
+      );
+      return;
+    }
+
+    const p = clients.find((c) => c.id === participantVal);
+    if (!p) {
+      setAssessmentQueue((prev) =>
+        prev.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                targetParticipantId: '',
+                targetParticipantName: 'Unassigned (Select Participant)',
+                suggestedNewParticipant: false
+              }
+            : item
+        )
+      );
+      return;
+    }
+
+    setAssessmentQueue((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              targetParticipantId: p.id,
+              targetParticipantName: p.name,
+              suggestedNewParticipant: false
+            }
+          : item
+      )
+    );
+  };
+
+  // Modify target subfolder for item in queue
+  const handleUpdateQueueSubfolder = (id: string, subfolder: string) => {
+    setAssessmentQueue((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              targetSubfolder: subfolder
+            }
+          : item
+      )
+    );
+  };
+
+  // Unlink document from participant
+  const handleUnlinkDocument = async (docId: string, clientId?: string) => {
     try {
       if (clientId) {
-        await unlinkDocumentFromClient(id, clientId);
+        await unlinkDocumentFromClient(docId, clientId);
+        const targetClient = clients.find((c) => c.id === clientId);
+        if (targetClient) {
+          const updated = (targetClient.documents || targetClient.attachedDocuments || []).filter(
+            (d) => d.id !== docId
+          );
+          updateClient(clientId, { documents: updated, attachedDocuments: updated });
+        }
       }
-      setLinkedDocs((prev) => prev.filter((d) => d.id !== id));
-      addAuditLog('UNLINK_DRIVE_DOC', 'GoogleDriveFile', id, `Unlinked Drive document "${name}"`);
+      setLinkedDocs((prev) => prev.filter((d) => d.id !== docId));
       addNotification({
-        title: 'Drive Document Detached',
-        message: `Unlinked "${name}" from practice registry and Firestore.`,
-        type: 'general',
+        title: 'Document Unlinked',
+        message: 'The file reference was removed from the participant folder.',
+        type: 'clinical',
         severity: 'low'
       });
     } catch (err) {
-      console.warn('Error removing document:', err);
-      setLinkedDocs((prev) => prev.filter((d) => d.id !== id));
+      console.error('Failed to unlink document:', err);
     }
   };
 
-  const filteredDocs = useMemo(() => {
+  // Filtered linked documents
+  const filteredLinkedDocs = useMemo(() => {
     return linkedDocs.filter((doc) => {
       const matchesSearch =
         doc.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (doc.clientName && doc.clientName.toLowerCase().includes(searchQuery.toLowerCase()));
-      const matchesCat = filterCategory === 'ALL' || doc.category === filterCategory;
-      return matchesSearch && matchesCat;
+        (doc.clientName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (doc.subfolder || '').toLowerCase().includes(searchQuery.toLowerCase());
+
+      const matchesCategory = filterCategory === 'ALL' || doc.category === filterCategory;
+      const matchesParticipant =
+        filterParticipant === 'ALL' || doc.clientId === filterParticipant;
+
+      return matchesSearch && matchesCategory && matchesParticipant;
     });
-  }, [linkedDocs, searchQuery, filterCategory]);
-
-  const getFileIcon = (mime: string) => {
-    if (mime?.includes('pdf')) return <FileText className="w-5 h-5 text-rose-400" />;
-    if (mime?.includes('sheet') || mime?.includes('excel'))
-      return <FileSpreadsheet className="w-5 h-5 text-emerald-400" />;
-    if (mime?.includes('document') || mime?.includes('word'))
-      return <FileCheck className="w-5 h-5 text-blue-400" />;
-    return <HardDrive className="w-5 h-5 text-teal-400" />;
-  };
-
-  const formatBytes = (bytes?: number) => {
-    if (!bytes) return 'Unknown size';
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / 1048576).toFixed(1)} MB`;
-  };
+  }, [linkedDocs, searchQuery, filterCategory, filterParticipant]);
 
   const targetClient = clients.find((c) => c.id === selectedClientId);
 
   return (
     <div className="space-y-6">
-      {/* Top Action Card */}
-      <div className="p-6 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-5">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-xl bg-teal-500/10 text-teal-400">
-                <HardDrive className="w-5 h-5" />
-              </div>
-              <h2 className="text-lg font-bold text-white">Google Drive Clinical Picker</h2>
-              <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-teal-500/20 text-teal-300 font-semibold border border-teal-500/30 flex items-center gap-1">
-                <Database className="w-3 h-3" /> Firestore Linked
+      {/* Hidden Inputs for Folder and Files Selection */}
+      <input
+        type="file"
+        ref={folderInputRef}
+        onChange={handleFolderInputChange}
+        // @ts-ignore
+        webkitdirectory="true"
+        directory="true"
+        multiple
+        className="hidden"
+      />
+      <input
+        type="file"
+        ref={filesInputRef}
+        onChange={handleFilesInputChange}
+        multiple
+        className="hidden"
+      />
+
+      {/* Main Header & Workspace Connection Banner */}
+      <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex items-start gap-4">
+          <div className="p-3.5 rounded-2xl bg-teal-500/10 text-teal-400 border border-teal-500/20">
+            <HardDrive className="w-8 h-8" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h2 className="text-xl font-extrabold text-white">
+                Google Drive & Folder Drop Hub
+              </h2>
+              <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-teal-500/10 text-teal-400 border border-teal-500/20 font-bold">
+                Smart Document Classifier Active
+              </span>
+              <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 font-mono">
+                12 NDIS Standard Subfolders
               </span>
             </div>
-            <p className="text-xs text-slate-400">
-              Directly select files from Google Drive, verify clinical content in the embedded preview, and securely store metadata in Firestore.
+            <p className="text-xs text-slate-400 mt-1 max-w-2xl">
+              Drop entire directories with nested folders, multiple documents, or connect to Google Drive. The clinical engine evaluates each file, routes it into the participant&apos;s folder, and automatically synchronizes NDIS metadata into Firestore.
             </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Participant selector */}
-            <div className="flex items-center gap-2 bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-700">
-              <User className="w-4 h-4 text-teal-400" />
-              <select
-                aria-label="Assign to Participant"
-                value={selectedClientId}
-                onChange={(e) => setSelectedClientId(e.target.value)}
-                className="bg-transparent text-xs text-slate-200 focus:outline-none cursor-pointer max-w-[180px] truncate"
-              >
-                <option value="" className="bg-slate-900 text-slate-300">
-                  Select Participant...
-                </option>
-                {clients.map((c) => (
-                  <option key={c.id} value={c.id} className="bg-slate-900 text-slate-200">
-                    {c.name} ({c.ndisNumber})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Document category selector */}
-            <select
-              aria-label="Document Category"
-              value={documentCategory}
-              onChange={(e) => setDocumentCategory(e.target.value as DocumentCategory)}
-              className="bg-slate-800/80 px-3 py-2 rounded-xl border border-slate-700 text-xs text-slate-200 focus:outline-none cursor-pointer"
-            >
-              <option value="NDIS Plan Document">NDIS Plan Document</option>
-              <option value="Assessment PDF">Assessment Report</option>
-              <option value="BSP Document">Behaviour Support Plan</option>
-              <option value="Clinical Report">Allied Health Clinical Report</option>
-              <option value="Consent Form">Consent & Service Agreement</option>
-              <option value="Incident Photo Evidence">Incident Evidence / Photo</option>
-            </select>
-
-            {/* Launch Picker Button */}
-            <button
-              id="btn-launch-google-picker"
-              type="button"
-              onClick={() => handleOpenPicker(false)}
-              disabled={loadingPhase !== 'idle'}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-400 hover:to-emerald-500 text-slate-950 font-bold text-xs transition shadow-lg shadow-teal-500/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-            >
-              {loadingPhase !== 'idle' ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-                  <span>
-                    {loadingPhase === 'loading_api' && 'Loading API...'}
-                    {loadingPhase === 'requesting_auth' && 'Authenticating...'}
-                    {loadingPhase === 'opening_picker' && 'Opening Picker...'}
-                  </span>
-                </>
-              ) : (
-                <>
-                  <Plus className="w-4 h-4" />
-                  <span>Select from Google Drive</span>
-                </>
-              )}
-            </button>
           </div>
         </div>
 
-        {/* Dynamic Loading State Banner */}
-        {loadingPhase !== 'idle' && (
-          <div className="p-3.5 rounded-2xl bg-teal-500/10 border border-teal-500/30 flex items-center gap-3 text-xs text-teal-300 animate-pulse">
-            <div className="w-4 h-4 border-2 border-teal-400 border-t-transparent rounded-full animate-spin shrink-0" />
-            <div className="flex-1">
-              <span className="font-semibold">
-                {loadingPhase === 'loading_api' && 'Initializing Google Workspace Picker Gateway...'}
-                {loadingPhase === 'requesting_auth' && 'Validating OAuth2 Drive Scopes (drive.file & drive.metadata.readonly)...'}
-                {loadingPhase === 'opening_picker' && 'Opening secure Google Drive selection window...'}
-              </span>
-              <p className="text-[11px] text-teal-400/80">
-                Please ensure pop-up blockers allow the Google account authentication dialog.
-              </p>
-            </div>
-          </div>
-        )}
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            onClick={() => folderInputRef.current?.click()}
+            className="px-4 py-2.5 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold transition-all flex items-center gap-2 shadow-lg shadow-teal-900/30"
+            title="Upload and recursively traverse an entire folder of files"
+          >
+            <FolderUp className="w-4 h-4" />
+            <span>Drop / Browse Folder</span>
+          </button>
 
-        {/* Graceful Feedback on User Cancellation */}
-        {cancellationNotice && (
-          <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-xs text-amber-300">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
-              <span>{cancellationNotice}</span>
-            </div>
-            <button
-              onClick={() => setCancellationNotice(null)}
-              className="p-1 text-amber-400 hover:text-amber-200 transition"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        )}
+          <button
+            onClick={() => filesInputRef.current?.click()}
+            className="px-4 py-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-all flex items-center gap-2 border border-slate-700"
+            title="Browse and select multiple files"
+          >
+            <Files className="w-4 h-4 text-teal-400" />
+            <span>Select Multiple Files</span>
+          </button>
 
-        {/* Authorization Expiration UI Banner with 1-Click Re-Auth */}
-        {authExpiredNotice && (
-          <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/40 space-y-2 text-xs text-rose-300">
-            <div className="flex items-start gap-2.5">
-              <ShieldAlert className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <span className="font-bold text-rose-200">Google Workspace Authorization Expired</span>
-                <p className="text-[11px] text-rose-300/90 mt-0.5">{authExpiredNotice}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 pt-1">
-              <button
-                type="button"
-                onClick={handleReauthorizeAndReopen}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition cursor-pointer"
-              >
-                <RotateCw className="w-3.5 h-3.5" />
-                <span>Re-authenticate & Open Drive</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setAuthExpiredNotice(null)}
-                className="text-xs underline text-rose-300 hover:text-rose-100"
-              >
-                Dismiss
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Generic Picker Error Banner */}
-        {pickerError && (
-          <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-between text-xs text-rose-300">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-              <span>{pickerError}</span>
-            </div>
-            <button
-              onClick={() => setPickerError(null)}
-              className="text-xs underline hover:text-rose-200 ml-3"
-            >
-              Dismiss
-            </button>
-          </div>
-        )}
+          <button
+            onClick={() => handleOpenPicker(false)}
+            disabled={loadingPhase !== 'idle'}
+            className="px-4 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all flex items-center gap-2 shadow-lg shadow-indigo-900/30"
+          >
+            <HardDrive className="w-4 h-4" />
+            <span>Connect Google Drive</span>
+          </button>
+        </div>
       </div>
 
-      {/* Linked Drive Documents Table & Filter Bar */}
-      <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      {/* Expanding Folders Active Notification */}
+      {loadingPhase === 'expanding_folders' && (
+        <div className="p-4 rounded-2xl bg-indigo-950/80 border border-indigo-500/50 text-indigo-200 text-xs flex items-center gap-3 animate-pulse">
+          <RotateCw className="w-5 h-5 animate-spin text-indigo-400 shrink-0" />
           <div>
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <span>Linked Drive Documents</span>
-              <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 text-[11px]">
-                {filteredDocs.length}
-              </span>
+            <p className="font-bold text-white">Traversing Google Drive Folder Structure...</p>
+            <p className="text-[11px] text-indigo-300">Recursively scanning subfolders and extracting all clinical documents for assessment.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Interactive Recursive Folder & Multiple Files Drag & Drop Zone */}
+      <div
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={`p-8 rounded-3xl border-2 border-dashed transition-all flex flex-col items-center justify-center text-center cursor-pointer group ${
+          isDraggingOver
+            ? 'border-teal-400 bg-teal-950/30 shadow-2xl shadow-teal-950/60 scale-[1.01]'
+            : 'border-slate-700/80 bg-slate-900/40 hover:bg-slate-900/70 hover:border-teal-500/60'
+        }`}
+        onClick={() => folderInputRef.current?.click()}
+      >
+        <div className="p-4 rounded-3xl bg-teal-500/10 text-teal-400 border border-teal-500/20 group-hover:scale-110 transition-transform mb-3">
+          <UploadCloud className="w-10 h-10" />
+        </div>
+        <h3 className="text-base font-extrabold text-white">
+          Drop Entire Participant Folders or Multiple Files Here
+        </h3>
+        <p className="text-xs text-slate-400 mt-1 max-w-lg">
+          Drag and drop nested client folders containing PDFs, Word documents, Excel sheets, and images. Each document is assessed to identify the participant, mapped to the correct subfolder (e.g., <em>BSP</em>, <em>NDIS Plan</em>, <em>Invoices</em>), and extracted clinical updates are saved to Firestore.
+        </p>
+        <div className="flex items-center gap-4 mt-4 text-[11px] text-slate-500 font-medium">
+          <span className="flex items-center gap-1">
+            <CheckCircle2 className="w-3.5 h-3.5 text-teal-400" /> Recursive Directory Traversal
+          </span>
+          <span className="flex items-center gap-1">
+            <CheckCircle2 className="w-3.5 h-3.5 text-teal-400" /> PDF, DOCX, XLSX, Images & Scans
+          </span>
+          <span className="flex items-center gap-1">
+            <CheckCircle2 className="w-3.5 h-3.5 text-teal-400" /> Automatic Firestore Schema Sync
+          </span>
+        </div>
+      </div>
+
+      {/* Real-Time Document Assessment Queue */}
+      {assessmentQueue.length > 0 && (
+        <div className="p-6 rounded-3xl bg-slate-900 border border-teal-500/50 shadow-2xl space-y-4 animate-in fade-in">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-2xl bg-teal-500/20 text-teal-300">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-extrabold text-white flex items-center gap-2">
+                  <span>Document Assessment & Clinical Router Queue</span>
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-teal-500/20 text-teal-300 font-mono font-bold">
+                    {assessmentQueue.length} Ready to Route
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Review the evaluated participant assignments and target subfolders below before confirming the batch update to Firestore.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2.5">
+              <button
+                onClick={() => setAssessmentQueue([])}
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white text-xs font-semibold"
+              >
+                Clear Queue
+              </button>
+              <button
+                onClick={handleCommitAssessmentQueue}
+                disabled={isCommittingQueue}
+                className="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-teal-900/40 transition-all"
+              >
+                {isCommittingQueue ? (
+                  <>
+                    <RotateCw className="w-4 h-4 animate-spin" />
+                    <span>Routing to Firestore ({commitProgress}%)...</span>
+                  </>
+                ) : (
+                  <>
+                    <Database className="w-4 h-4" />
+                    <span>Route & Update All {assessmentQueue.length} Documents</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Assessment Queue Table */}
+          <div className="overflow-x-auto max-h-[400px] border border-slate-800 rounded-2xl">
+            <table className="w-full text-left text-xs text-slate-300">
+              <thead className="bg-slate-950/80 text-[10px] uppercase font-bold tracking-wider text-slate-400 sticky top-0 z-10 backdrop-blur-md">
+                <tr>
+                  <th className="p-3">File & Original Path</th>
+                  <th className="p-3">Assessed Participant</th>
+                  <th className="p-3">Target Subfolder</th>
+                  <th className="p-3">Confidence & Rationale</th>
+                  <th className="p-3">Extracted Client Updates</th>
+                  <th className="p-3 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/80 bg-slate-950/40">
+                {assessmentQueue.map((item) => (
+                  <tr key={item.id} className="hover:bg-slate-800/40 transition-colors">
+                    {/* File & Path */}
+                    <td className="p-3">
+                      <div className="flex items-start gap-2.5">
+                        {getFileIcon(item.mimeType, item.fileName)}
+                        <div>
+                          <p className="font-bold text-white max-w-[200px] truncate" title={item.fileName}>
+                            {item.fileName}
+                          </p>
+                          <p className="text-[10px] text-slate-500 font-mono truncate max-w-[200px]" title={item.filePath}>
+                            {item.filePath}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Target Participant with Selector */}
+                    <td className="p-3">
+                      <select
+                        value={
+                          item.targetParticipantId
+                            ? item.targetParticipantId
+                            : item.suggestedNewParticipant && item.targetParticipantName
+                            ? `new:${item.targetParticipantName}`
+                            : ''
+                        }
+                        onChange={(e) => handleUpdateQueueParticipant(item.id, e.target.value)}
+                        className="p-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs text-teal-300 font-bold focus:outline-none focus:border-teal-500 max-w-[190px]"
+                      >
+                        {item.suggestedNewParticipant && item.targetParticipantName && (
+                          <option value={`new:${item.targetParticipantName}`}>
+                            ✨ Auto-Create: {item.targetParticipantName}
+                          </option>
+                        )}
+                        <option value="">-- Unassigned --</option>
+                        {clients.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} ({c.ndisNumber})
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+
+                    {/* Target Subfolder with Selector */}
+                    <td className="p-3">
+                      <select
+                        value={item.targetSubfolder}
+                        onChange={(e) => handleUpdateQueueSubfolder(item.id, e.target.value)}
+                        className="p-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs text-indigo-300 font-semibold focus:outline-none focus:border-indigo-500 max-w-[180px]"
+                      >
+                        {STANDARD_DRIVE_SUBFOLDERS.map((sub) => (
+                          <option key={sub} value={sub}>
+                            {sub}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+
+                    {/* Confidence & Rationale */}
+                    <td className="p-3">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <div className="w-14 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-teal-400 rounded-full"
+                              style={{ width: `${item.confidence}%` }}
+                            />
+                          </div>
+                          <span className="font-mono text-[10px] font-bold text-teal-400">
+                            {item.confidence}%
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 max-w-[220px] truncate" title={item.rationale}>
+                          {item.rationale}
+                        </p>
+                      </div>
+                    </td>
+
+                    {/* Extracted Updates */}
+                    <td className="p-3">
+                      <div className="flex items-center gap-1.5 flex-wrap max-w-[240px]">
+                        {item.extractedUpdates.ndisNumber && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-teal-500/10 text-teal-300 border border-teal-500/20 font-mono">
+                            NDIS: {item.extractedUpdates.ndisNumber}
+                          </span>
+                        )}
+                        {item.extractedUpdates.totalBudget && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-mono">
+                            ${item.extractedUpdates.totalBudget.toLocaleString()}
+                          </span>
+                        )}
+                        {item.extractedUpdates.bspExpiryDate && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+                            BSP Expiry: {item.extractedUpdates.bspExpiryDate}
+                          </span>
+                        )}
+                        {item.extractedUpdates.restrictivePracticesActive && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-300 border border-rose-500/20 font-bold">
+                            Restrictive Practices Active
+                          </span>
+                        )}
+                        {Object.keys(item.extractedUpdates).length === 0 && (
+                          <span className="text-[10px] text-slate-500 font-normal">
+                            Document filing only
+                          </span>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* Action */}
+                    <td className="p-3 text-right">
+                      <button
+                        onClick={() => handleRemoveQueueItem(item.id)}
+                        className="p-1 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-slate-800 transition-colors"
+                        title="Remove from queue"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Linked Documents Library Filter & Search */}
+      <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl space-y-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h3 className="text-base font-extrabold text-white flex items-center gap-2">
+              <FolderOpen className="w-5 h-5 text-teal-400" />
+              <span>Participant Folders & Synchronized Documents</span>
             </h3>
             <p className="text-xs text-slate-400">
-              Synchronized Google Drive files stored in Firestore and linked across participant dossiers
+              Official documents stored across participant subfolders with real-time Firestore persistence
             </p>
           </div>
 
-          <div className="flex items-center gap-3 w-full sm:w-auto">
-            {/* Search */}
-            <div className="relative flex-1 sm:w-60">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          {/* Filters */}
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
               <input
                 type="text"
-                placeholder="Search documents or clients..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-8 pr-3 py-1.5 bg-slate-800/80 border border-slate-700 rounded-xl text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-teal-500"
+                placeholder="Search file, participant, folder..."
+                className="pl-9 pr-4 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-teal-500 w-56"
               />
             </div>
 
-            {/* Category Filter */}
-            <div className="flex items-center gap-1.5 bg-slate-800/80 px-2.5 py-1.5 rounded-xl border border-slate-700">
-              <Filter className="w-3.5 h-3.5 text-slate-400" />
-              <select
-                aria-label="Filter category"
-                value={filterCategory}
-                onChange={(e) => setFilterCategory(e.target.value)}
-                className="bg-transparent text-xs text-slate-200 focus:outline-none cursor-pointer"
-              >
-                <option value="ALL" className="bg-slate-900">All Categories</option>
-                <option value="NDIS Plan Document" className="bg-slate-900">NDIS Plans</option>
-                <option value="Assessment PDF" className="bg-slate-900">Assessments</option>
-                <option value="BSP Document" className="bg-slate-900">Behaviour Plans</option>
-                <option value="Clinical Report" className="bg-slate-900">Clinical Reports</option>
-                <option value="Consent Form" className="bg-slate-900">Consent Forms</option>
-              </select>
-            </div>
+            <select
+              value={filterParticipant}
+              onChange={(e) => setFilterParticipant(e.target.value)}
+              className="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300 font-semibold"
+            >
+              <option value="ALL">All Participants ({clients.length})</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+              className="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300 font-semibold"
+            >
+              <option value="ALL">All Categories</option>
+              {STANDARD_DRIVE_SUBFOLDERS.map((sub) => (
+                <option key={sub} value={sub}>
+                  {sub}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
-        {/* List of files */}
-        {filteredDocs.length === 0 ? (
-          <div className="py-12 text-center rounded-2xl border border-dashed border-slate-800 text-slate-500 text-xs space-y-2">
-            <HardDrive className="w-8 h-8 text-slate-600 mx-auto" />
-            <p>No Google Drive documents match the current filter.</p>
-            <p className="text-[11px] text-slate-600">
-              Click &ldquo;Select from Google Drive&rdquo; above to attach documents directly.
-            </p>
-          </div>
-        ) : (
-          <div className="divide-y divide-slate-800/80 overflow-hidden rounded-2xl border border-slate-800">
-            {filteredDocs.map((doc) => (
-              <div
-                key={doc.id}
-                className="p-4 bg-slate-900/50 hover:bg-slate-800/40 transition flex flex-col md:flex-row md:items-center justify-between gap-3"
-              >
-                <div className="flex items-start gap-3 min-w-0">
-                  <div className="p-2.5 rounded-xl bg-slate-800/80 shrink-0 mt-0.5">
-                    {getFileIcon(doc.mimeType)}
-                  </div>
-                  <div className="min-w-0 space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-bold text-white truncate max-w-md">
-                        {doc.name}
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-teal-500/10 text-teal-400 font-semibold border border-teal-500/20">
-                        {doc.category}
-                      </span>
-                      {doc.caseNoteId && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-300 font-semibold border border-blue-500/30 flex items-center gap-1">
-                          <LinkIcon className="w-3 h-3" /> Linked to Note #{doc.caseNoteId}
-                        </span>
-                      )}
-                      {doc.tags && doc.tags.length > 0 && (
-                        <div className="flex items-center gap-1 flex-wrap">
-                          {doc.tags.map((t) => (
-                            <span
-                              key={t}
-                              className={`text-[9px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider ${
-                                t === 'Clinical'
-                                  ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                                  : t === 'Financial'
-                                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                                  : t === 'Legal'
-                                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                                  : t === 'Compliance'
-                                  ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
-                                  : 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
-                              }`}
-                            >
-                              {t}
-                            </span>
-                          ))}
-                        </div>
-                      )}
+        {/* Linked Documents Table */}
+        <div className="overflow-x-auto border border-slate-800 rounded-2xl">
+          <table className="w-full text-left text-xs text-slate-300">
+            <thead className="bg-slate-950/80 text-[10px] uppercase font-bold tracking-wider text-slate-400">
+              <tr>
+                <th className="p-3">Document Title</th>
+                <th className="p-3">Participant</th>
+                <th className="p-3">Participant Subfolder</th>
+                <th className="p-3">Category</th>
+                <th className="p-3">Uploaded / Synced</th>
+                <th className="p-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/80 bg-slate-950/40">
+              {filteredLinkedDocs.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="p-12 text-center text-slate-500">
+                    <div className="flex flex-col items-center justify-center space-y-2">
+                      <HardDrive className="w-8 h-8 text-slate-600" />
+                      <p className="font-semibold text-sm text-slate-400">No mock documents present.</p>
+                      <p className="text-xs text-slate-500 max-w-sm">
+                        Drop a participant folder above, select multiple files, or connect Google Drive to assess and route documents into the participant repository.
+                      </p>
                     </div>
-
-                    <div className="flex items-center gap-3 text-[11px] text-slate-400 flex-wrap">
-                      {doc.clientName && (
-                        <span className="flex items-center gap-1 text-slate-300">
-                          <User className="w-3 h-3 text-teal-400" />
-                          {doc.clientName}
+                  </td>
+                </tr>
+              ) : (
+                filteredLinkedDocs.map((doc) => (
+                  <tr key={doc.id} className="hover:bg-slate-800/40 transition-colors">
+                    {/* Document Title */}
+                    <td className="p-3 font-semibold text-white">
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-teal-400 flex-shrink-0" />
+                        <span className="truncate max-w-[240px]" title={doc.name}>
+                          {doc.name}
                         </span>
-                      )}
-                      <span>{formatBytes(doc.sizeBytes)}</span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-slate-500" />
-                        {new Date(doc.uploadedAt).toLocaleDateString('en-AU', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric'
-                        })}
+                      </div>
+                    </td>
+
+                    {/* Participant */}
+                    <td className="p-3 font-bold text-teal-300">
+                      {doc.clientName || 'General Participant File'}
+                    </td>
+
+                    {/* Subfolder */}
+                    <td className="p-3">
+                      <span className="inline-flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 font-semibold">
+                        <FolderOpen className="w-3 h-3 text-indigo-400" />
+                        <span>{doc.subfolder || 'Assessments/ Reports'}</span>
                       </span>
-                      <span className="text-slate-500">By {doc.uploadedByName || 'Clinician'}</span>
-                    </div>
-                  </div>
-                </div>
+                    </td>
 
-                <div className="flex items-center gap-2 self-end md:self-center shrink-0">
-                  {/* Preview & Verify Button */}
-                  <button
-                    id={`btn-preview-doc-${doc.id}`}
-                    type="button"
-                    onClick={() => handleOpenPreview(doc)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 text-xs font-semibold transition border border-teal-500/30 cursor-pointer"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                    <span>Preview & Verify</span>
-                  </button>
+                    {/* Category */}
+                    <td className="p-3 text-slate-400">
+                      {doc.category}
+                    </td>
 
-                  {/* Open in Drive Button */}
-                  <a
-                    href={doc.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition border border-slate-700"
-                  >
-                    <span>Drive</span>
-                    <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
-                  </a>
+                    {/* Upload Date */}
+                    <td className="p-3 font-mono text-slate-500">
+                      {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString() : 'Recent'}
+                    </td>
 
-                  {/* Unlink Button */}
-                  <button
-                    onClick={() => handleRemoveDoc(doc.id, doc.name, doc.clientId)}
-                    aria-label="Unlink document"
-                    className="p-1.5 rounded-xl bg-slate-800/60 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition cursor-pointer"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+                    {/* Actions */}
+                    <td className="p-3 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => {
+                            setPreviewDocument(doc);
+                            setPreviewClientId(doc.clientId || '');
+                            setPreviewModalOpen(true);
+                          }}
+                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                          title="Preview document"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+
+                        {doc.url && (
+                          <a
+                            href={doc.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-teal-400 hover:text-teal-300 transition-colors"
+                            title="Open in Google Drive"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        )}
+
+                        <button
+                          onClick={() => handleUnlinkDocument(doc.id, doc.clientId)}
+                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950/40 text-slate-400 hover:text-rose-400 transition-colors"
+                          title="Remove document reference"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* Preview & Verification Modal */}
-      <GoogleDrivePreviewModal
-        isOpen={previewModalOpen}
-        onClose={() => setPreviewModalOpen(false)}
-        document={previewDocument}
-        initialClientId={previewClientId}
-        initialCategory={documentCategory}
-        onLinkedSuccess={(updatedDoc, linkedNoteId) => {
-          setLinkedDocs((prev) =>
-            prev.map((d) =>
-              d.id === updatedDoc.id
-                ? {
-                    ...d,
-                    caseNoteId: linkedNoteId || d.caseNoteId,
-                    clientId: updatedDoc.clientId || d.clientId,
-                    clientName: updatedDoc.clientName || d.clientName
-                  }
-                : d
-            )
-          );
-        }}
-      />
+      {/* Google Drive Preview Modal */}
+      {previewModalOpen && previewDocument && (
+        <GoogleDrivePreviewModal
+          isOpen={previewModalOpen}
+          onClose={() => {
+            setPreviewModalOpen(false);
+            setPreviewDocument(null);
+          }}
+          document={previewDocument}
+          initialClientId={previewClientId}
+        />
+      )}
     </div>
   );
 };
