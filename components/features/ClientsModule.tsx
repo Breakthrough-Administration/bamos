@@ -114,7 +114,7 @@ export const ClientsModule: React.FC = () => {
   const handleArchiveParticipantDossier = (client: Client) => {
     const archivePath = `Staff Share Drive > Archive > Inactive Participants > ${client.name}`;
     updateClient(client.id, {
-      status: 'Discharged',
+      status: 'Archived',
       driveFolderPath: archivePath
     });
 

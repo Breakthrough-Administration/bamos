@@ -20,22 +20,30 @@ try {
 const projectId =
   serviceAccount?.project_id ||
   process.env.FIREBASE_PROJECT_ID ||
-  firebaseConfig.projectId ||
-  'gen-lang-client-0291935584';
+  firebaseConfig.projectId;
 
-const databaseId =
-  (firebaseConfig as any).firestoreDatabaseId ||
-  'ai-studio-amos-2f422ba5-7cb0-48ad-bac6-be491064bb5d';
+const databaseId = (firebaseConfig as any).firestoreDatabaseId;
 
 let adminApp: App;
 
 if (getApps().length > 0) {
   adminApp = getApp();
-} else if (serviceAccount) {
-  adminApp = initializeApp({
-    credential: cert(serviceAccount),
-    projectId,
-  });
+} else if (
+  serviceAccount &&
+  serviceAccount.private_key &&
+  typeof serviceAccount.private_key === 'string' &&
+  serviceAccount.private_key.includes('PRIVATE KEY')
+) {
+  try {
+    adminApp = initializeApp({
+      credential: cert(serviceAccount),
+      projectId,
+    });
+  } catch {
+    adminApp = initializeApp({
+      projectId,
+    });
+  }
 } else {
   adminApp = initializeApp({
     projectId,
@@ -43,5 +51,5 @@ if (getApps().length > 0) {
 }
 
 export const adminAuth: Auth = getAuth(adminApp);
-export const adminDb: Firestore = getFirestore(adminApp, databaseId);
+export const adminDb: Firestore = databaseId ? getFirestore(adminApp, databaseId) : getFirestore(adminApp);
 export default adminApp;

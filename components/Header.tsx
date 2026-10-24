@@ -16,6 +16,7 @@ import {
   Command
 } from 'lucide-react';
 import { logOutGoogle } from '@/lib/firebase';
+import { IntegrationStatusIndicator } from './IntegrationStatusIndicator';
 
 export const Header: React.FC = () => {
   const {
@@ -92,6 +93,9 @@ export const Header: React.FC = () => {
 
       {/* Right: Connectivity status, Theme, Notifications, User */}
       <div className="flex items-center gap-2">
+        {/* Centralized Google Workspace Integration Status Indicator */}
+        <IntegrationStatusIndicator />
+
         {/* Offline / Online indicator */}
         <button
           onClick={simulateOfflineToggle}

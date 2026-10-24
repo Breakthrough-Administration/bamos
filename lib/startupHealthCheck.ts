@@ -37,7 +37,7 @@ export function runClientStartupHealthCheck(): SystemHealthReport {
   // 1. Firebase Client Configuration
   const hasProjectId = Boolean(firebaseConfig.projectId && firebaseConfig.projectId.trim().length > 0);
   const hasApiKey = Boolean(firebaseConfig.apiKey && firebaseConfig.apiKey.trim().length > 0);
-  const firestoreDbId = (firebaseConfig as any).firestoreDatabaseId || 'ai-studio-amos-2f422ba5-7cb0-48ad-bac6-be491064bb5d';
+  const firestoreDbId = (firebaseConfig as any).firestoreDatabaseId || '(default)';
 
   if (hasProjectId && hasApiKey) {
     checks.push({

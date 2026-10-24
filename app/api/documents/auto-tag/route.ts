@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenAI } from '@google/genai';
+import { callGeminiWithTimeout } from '@/lib/geminiSafeClient';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -153,17 +153,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
-
-    // Fallback if API key not provided
-    if (!apiKey) {
-      const fallback = heuristicTagAnalysis(body);
-      return NextResponse.json(fallback);
-    }
-
-    // Call Gemini 3.8 Flash for intelligent classification
-    const ai = new GoogleGenAI({ apiKey });
-
+    // Attempt classification with Gemini 3.8 Flash, or fallback to heuristics if unavailable
     const prompt = `You are an expert NDIS Clinical Records & Compliance AI for Breakthrough Coaching & Consulting.
 Inspect the following document metadata and determine the most relevant tags and category before it is linked to a participant's profile.
 
@@ -193,44 +183,59 @@ Return ONLY valid JSON matching this exact structure:
   "reasoning": "Clear concise 1-2 sentence explanation of why these tags apply based on NDIS governance standards."
 }`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json'
+    const geminiResponse = await callGeminiWithTimeout(async (ai) => {
+      return await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json'
+        }
+      });
+    }, 4000);
+
+    if (geminiResponse && geminiResponse.text) {
+      const responseText = geminiResponse.text.trim();
+      let parsed: any = null;
+
+      try {
+        parsed = JSON.parse(responseText);
+      } catch {
+        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          try {
+            parsed = JSON.parse(jsonMatch[0]);
+          } catch {
+            parsed = null;
+          }
+        }
       }
-    });
 
-    const responseText = response.text?.trim() || '';
-    let parsed: any;
+      if (parsed) {
+        const validTags = Array.isArray(parsed.suggestedTags)
+          ? parsed.suggestedTags.filter((t: string) => ALL_POSSIBLE_TAGS.includes(t))
+          : ['Clinical'];
 
-    try {
-      parsed = JSON.parse(responseText);
-    } catch {
-      // Regex extraction fallback
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        parsed = JSON.parse(jsonMatch[0]);
-      } else {
-        throw new Error('Failed to parse Gemini JSON output');
+        return NextResponse.json({
+          suggestedTags: validTags.length > 0 ? validTags : ['Clinical'],
+          confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0.92,
+          suggestedCategory: parsed.suggestedCategory || body.category || 'Clinical Document',
+          reasoning: parsed.reasoning || `Classified using Gemini AI for "${body.fileName}".`,
+          source: 'gemini'
+        });
       }
     }
 
-    const validTags = Array.isArray(parsed.suggestedTags)
-      ? parsed.suggestedTags.filter((t: string) => ALL_POSSIBLE_TAGS.includes(t))
-      : ['Clinical'];
-
-    return NextResponse.json({
-      suggestedTags: validTags.length > 0 ? validTags : ['Clinical'],
-      confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0.92,
-      suggestedCategory: parsed.suggestedCategory || body.category || 'Clinical Document',
-      reasoning: parsed.reasoning || `Classified using Gemini AI for "${body.fileName}".`,
-      source: 'gemini'
-    });
-  } catch (error: any) {
-    console.warn('Gemini auto-tagging error, reverting to heuristic fallback:', error);
-    const body = await req.json().catch(() => ({ fileName: 'document.pdf' }));
+    // Heuristic fallback if Gemini timed out, returned 503, or returned unparseable text
     const fallback = heuristicTagAnalysis(body);
     return NextResponse.json(fallback);
+  } catch (error: any) {
+    console.warn('Auto-tagging endpoint caught error, reverting to heuristic fallback:', error?.message || error);
+    return NextResponse.json({
+      suggestedTags: ['Clinical'],
+      confidence: 0.85,
+      suggestedCategory: 'Clinical Document',
+      reasoning: 'Safe clinical fallback applied.',
+      source: 'heuristic'
+    });
   }
 }

@@ -283,7 +283,12 @@ export const HRModule: React.FC = () => {
                     const firstShift = scheduledShifts[0];
                     if (firstShift) {
                       const client = clients.find((c) => c.id === firstShift.clientId);
-                      const addr = client?.address || '12 Collins St, Melbourne VIC 3000';
+                      const rawAddr = client?.address;
+                      const addr = typeof rawAddr === 'string'
+                        ? rawAddr
+                        : rawAddr
+                        ? [rawAddr.street, rawAddr.suburb, rawAddr.state, rawAddr.postcode].filter(Boolean).join(', ')
+                        : '12 Collins St, Melbourne VIC 3000';
                       const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(`NDIS Shift: ${firstShift.clientName} w/ ${firstShift.practitionerName}`)}&details=${encodeURIComponent(`SCHADS Award Shift\nParticipant Address: ${addr}\nMMM Zone: MMM 1 (30m travel buffer)\nSession: ${firstShift.startTime}-${firstShift.endTime}`)}&location=${encodeURIComponent(addr)}`;
                       window.open(url, '_blank');
                     }
@@ -320,7 +325,12 @@ export const HRModule: React.FC = () => {
                   ) : (
                     scheduledShifts.map((shift) => {
                       const client = clients.find((c) => c.id === shift.clientId);
-                      const address = client?.address || 'Participant Residence, Melbourne VIC';
+                      const rawAddress = client?.address;
+                      const address = typeof rawAddress === 'string'
+                        ? rawAddress
+                        : rawAddress
+                        ? [rawAddress.street, rawAddress.suburb, rawAddress.state, rawAddress.postcode].filter(Boolean).join(', ')
+                        : 'Participant Residence, Melbourne VIC';
                       const isRegional = address.toLowerCase().includes('ballarat') || address.toLowerCase().includes('bendigo') || address.toLowerCase().includes('geelong');
                       const mmmBuffer = isRegional ? 'MMM 3 (+45m travel)' : 'MMM 1 (+30m travel)';
 

@@ -1,5 +1,9 @@
-import { GoogleGenAI, Type } from '@google/genai';
+import { Type } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
+import { callGeminiWithTimeout } from '@/lib/geminiSafeClient';
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 interface ScannedDriveFile {
   id: string;
@@ -92,8 +96,6 @@ export async function POST(req: NextRequest) {
 
     if (apiKey && discoveredFiles.length > 0) {
       try {
-        const ai = new GoogleGenAI({ apiKey });
-
         // Process files in batches to respect prompt constraints and quotas
         const batchSize = 10;
         for (let i = 0; i < discoveredFiles.length; i += batchSize) {
@@ -125,47 +127,55 @@ ${participantList.length > 0 ? participantList.map((p: { id: string; name: strin
 DOCUMENTS TO EVALUATE:
 ${batch.map((b, idx) => `[Doc ${idx + 1}] ID: "${b.id}", Name: "${b.name}", Path: "${b.path}", MIME: "${b.mimeType}"`).join('\n')}`;
 
-          const response = await ai.models.generateContent({
-            model: 'gemini-3.8-flash',
-            contents: prompt,
-            config: {
-              responseMimeType: 'application/json',
-              responseSchema: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    docId: { type: Type.STRING },
-                    targetParticipantId: { type: Type.STRING },
-                    targetParticipantName: { type: Type.STRING },
-                    targetSubfolder: { type: Type.STRING },
-                    category: { type: Type.STRING },
-                    confidence: { type: Type.NUMBER },
-                    rationale: { type: Type.STRING },
-                    isUnmatchable: { type: Type.BOOLEAN },
-                    extractedUpdates: {
-                      type: Type.OBJECT,
-                      properties: {
-                        ndisNumber: { type: Type.STRING },
-                        planStartDate: { type: Type.STRING },
-                        planEndDate: { type: Type.STRING },
-                        totalBudget: { type: Type.NUMBER },
-                        primaryDisability: { type: Type.STRING },
-                        restrictivePracticesActive: { type: Type.BOOLEAN },
-                        bspExpiryDate: { type: Type.STRING },
-                        bspStatus: { type: Type.STRING },
+          const geminiResponse = await callGeminiWithTimeout(async (ai) => {
+            return await ai.models.generateContent({
+              model: 'gemini-3.8-flash',
+              contents: prompt,
+              config: {
+                responseMimeType: 'application/json',
+                responseSchema: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      docId: { type: Type.STRING },
+                      targetParticipantId: { type: Type.STRING },
+                      targetParticipantName: { type: Type.STRING },
+                      targetSubfolder: { type: Type.STRING },
+                      category: { type: Type.STRING },
+                      confidence: { type: Type.NUMBER },
+                      rationale: { type: Type.STRING },
+                      isUnmatchable: { type: Type.BOOLEAN },
+                      extractedUpdates: {
+                        type: Type.OBJECT,
+                        properties: {
+                          ndisNumber: { type: Type.STRING },
+                          planStartDate: { type: Type.STRING },
+                          planEndDate: { type: Type.STRING },
+                          totalBudget: { type: Type.NUMBER },
+                          primaryDisability: { type: Type.STRING },
+                          restrictivePracticesActive: { type: Type.BOOLEAN },
+                          bspExpiryDate: { type: Type.STRING },
+                          bspStatus: { type: Type.STRING },
+                        },
                       },
                     },
+                    required: ['targetSubfolder', 'confidence', 'rationale'],
                   },
-                  required: ['targetSubfolder', 'confidence', 'rationale'],
                 },
               },
-            },
-          });
+            });
+          }, 4500);
 
-          const parsedBatch = JSON.parse(response.text || '[]');
-          if (Array.isArray(parsedBatch)) {
-            classifications.push(...parsedBatch);
+          if (geminiResponse && geminiResponse.text) {
+            try {
+              const parsedBatch = JSON.parse(geminiResponse.text);
+              if (Array.isArray(parsedBatch)) {
+                classifications.push(...parsedBatch);
+              }
+            } catch {
+              // Graceful ignore
+            }
           }
         }
       } catch (geminiErr: any) {

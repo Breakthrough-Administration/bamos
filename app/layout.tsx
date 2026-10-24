@@ -37,13 +37,6 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <link rel="manifest" href="/manifest.json" />
-        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-      </head>
-      <body className="antialiased bg-slate-950 text-slate-50 min-h-screen" suppressHydrationWarning>
-        {children}
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -62,12 +55,18 @@ export default function RootLayout({
                 }
               }, true);
 
-              if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-                // Ensure service worker is unregistered in development to prevent stale script caching
-                if (window.location.hostname === 'localhost' || window.location.hostname.includes('run.app')) {
+              if (typeof window !== 'undefined') {
+                if ('serviceWorker' in navigator) {
                   navigator.serviceWorker.getRegistrations().then(function(registrations) {
                     for (var i = 0; i < registrations.length; i++) {
                       registrations[i].unregister();
+                    }
+                  });
+                }
+                if ('caches' in window) {
+                  caches.keys().then(function(keys) {
+                    for (var i = 0; i < keys.length; i++) {
+                      caches.delete(keys[i]);
                     }
                   });
                 }
@@ -75,6 +74,9 @@ export default function RootLayout({
             `,
           }}
         />
+      </head>
+      <body className="antialiased bg-slate-950 text-slate-50 min-h-screen" suppressHydrationWarning>
+        {children}
       </body>
     </html>
   );

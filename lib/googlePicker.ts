@@ -159,11 +159,14 @@ export async function getOrRequestAccessToken(forceFresh: boolean = false): Prom
     return existing;
   }
 
-  // Interactive sign-in to obtain required scopes: drive.file and drive.metadata.readonly
+  // Interactive sign-in to obtain required authorized scopes
   try {
     const { accessToken } = await signInWithGoogle([
+      'https://www.googleapis.com/auth/drive.readonly',
       'https://www.googleapis.com/auth/drive.file',
-      'https://www.googleapis.com/auth/drive.metadata.readonly'
+      'https://www.googleapis.com/auth/calendar.events',
+      'https://www.googleapis.com/auth/classroom.courses.readonly',
+      'https://www.googleapis.com/auth/classroom.rosters.readonly'
     ]);
 
     if (!accessToken) {

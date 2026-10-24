@@ -12,6 +12,8 @@ import {
   Shield,
   Layers,
   Sparkles,
+  UserCheck,
+  StickyNote,
   X
 } from 'lucide-react';
 
@@ -62,6 +64,8 @@ export const CommandPalette: React.FC = () => {
     { label: 'Incident Reports & Governance', tab: 'incidents', icon: AlertOctagon },
     { label: 'Restrictive Practice Dashboard', tab: 'restrictive-practices', icon: Shield },
     { label: 'Google Workspace Gateway', tab: 'google-workspace', icon: Layers },
+    { label: 'Google Keep Clinical Sync', tab: 'google-keep', icon: StickyNote },
+    { label: 'Participant / Nominee Portal & Document Scanner', tab: 'participant-portal', icon: UserCheck },
     { label: 'AI Predictive Insights', tab: 'ai-predictive-insights', icon: Sparkles },
   ];
   const quickNav = allQuickNav.filter((item) => item.label.toLowerCase().includes(search.toLowerCase()));

@@ -7,7 +7,7 @@ import {
   GoogleAuthProvider,
   User
 } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
 // Global error handler to suppress the known Firebase Auth 11.x assertion error
@@ -36,10 +36,26 @@ if (typeof window !== 'undefined') {
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const databaseId = (firebaseConfig as any).firestoreDatabaseId || 'ai-studio-amos-2f422ba5-7cb0-48ad-bac6-be491064bb5d';
-const db = getFirestore(app, databaseId);
+const databaseId = (firebaseConfig as any).firestoreDatabaseId;
+const db = databaseId ? getFirestore(app, databaseId) : getFirestore(app);
 
-export { app, auth, db };
+// Test Firestore connection on boot
+async function testConnection() {
+  try {
+    await getDocFromServer(doc(db, 'test', 'connection'));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      // Offline cache mode or initial cold boot
+      console.warn('Firestore client initialized.');
+    }
+  }
+}
+
+if (typeof window !== 'undefined') {
+  testConnection();
+}
+
+export { app, auth, db, testConnection };
 
 export function onAuthUserChanged(callback: (user: User | null) => void) {
   return onAuthStateChanged(auth, (user) => {
@@ -88,8 +104,11 @@ export async function signInWithGoogle(customScopes?: string[]): Promise<{
     try {
       const provider = new GoogleAuthProvider();
       const defaultScopes = [
+        'https://www.googleapis.com/auth/drive.readonly',
         'https://www.googleapis.com/auth/drive.file',
-        'https://www.googleapis.com/auth/drive.metadata.readonly'
+        'https://www.googleapis.com/auth/calendar.events',
+        'https://www.googleapis.com/auth/classroom.courses.readonly',
+        'https://www.googleapis.com/auth/classroom.rosters.readonly'
       ];
       const scopes = customScopes && customScopes.length > 0 ? customScopes : defaultScopes;
       scopes.forEach((scope) => provider.addScope(scope));

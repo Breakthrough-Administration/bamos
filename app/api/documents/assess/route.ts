@@ -1,5 +1,9 @@
-import { GoogleGenAI, Type } from '@google/genai';
+import { Type } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
+import { callGeminiWithTimeout } from '@/lib/geminiSafeClient';
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   try {
@@ -8,14 +12,6 @@ export async function POST(req: NextRequest) {
     if (!fileName) {
       return NextResponse.json({ error: 'Missing fileName' }, { status: 400 });
     }
-
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      // Return empty so client falls back to local heuristic seamlessly
-      return NextResponse.json({ assessment: null, fallback: true });
-    }
-
-    const ai = new GoogleGenAI({ apiKey });
 
     const participantListSummary = (participants || [])
       .map((p: any) => `- ID: ${p.id}, Name: "${p.name}", NDIS: "${p.ndisNumber}"`)
@@ -52,44 +48,54 @@ TASK:
 3. Extract any identifiable participant field updates (e.g. NDIS number if 9 digits, plan dates, budget amounts, restrictive practices flags, primary disability if stated).
 4. Provide confidence (0-100) and rationale.`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            targetParticipantId: { type: Type.STRING },
-            targetParticipantName: { type: Type.STRING },
-            targetSubfolder: { type: Type.STRING },
-            category: { type: Type.STRING },
-            confidence: { type: Type.NUMBER },
-            rationale: { type: Type.STRING },
-            extractedUpdates: {
-              type: Type.OBJECT,
-              properties: {
-                ndisNumber: { type: Type.STRING },
-                planStartDate: { type: Type.STRING },
-                planEndDate: { type: Type.STRING },
-                totalBudget: { type: Type.NUMBER },
-                primaryDisability: { type: Type.STRING },
-                restrictivePracticesActive: { type: Type.BOOLEAN },
-                bspExpiryDate: { type: Type.STRING },
-                bspStatus: { type: Type.STRING },
-                status: { type: Type.STRING },
+    const geminiResponse = await callGeminiWithTimeout(async (ai) => {
+      return await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              targetParticipantId: { type: Type.STRING },
+              targetParticipantName: { type: Type.STRING },
+              targetSubfolder: { type: Type.STRING },
+              category: { type: Type.STRING },
+              confidence: { type: Type.NUMBER },
+              rationale: { type: Type.STRING },
+              extractedUpdates: {
+                type: Type.OBJECT,
+                properties: {
+                  ndisNumber: { type: Type.STRING },
+                  planStartDate: { type: Type.STRING },
+                  planEndDate: { type: Type.STRING },
+                  totalBudget: { type: Type.NUMBER },
+                  primaryDisability: { type: Type.STRING },
+                  restrictivePracticesActive: { type: Type.BOOLEAN },
+                  bspExpiryDate: { type: Type.STRING },
+                  bspStatus: { type: Type.STRING },
+                  status: { type: Type.STRING },
+                },
               },
             },
+            required: ['targetSubfolder', 'confidence', 'rationale'],
           },
-          required: ['targetSubfolder', 'confidence', 'rationale'],
         },
-      },
-    });
+      });
+    }, 4500);
 
-    const parsedJson = JSON.parse(response.text || '{}');
-    return NextResponse.json({ assessment: parsedJson });
+    if (geminiResponse && geminiResponse.text) {
+      try {
+        const parsedJson = JSON.parse(geminiResponse.text);
+        return NextResponse.json({ assessment: parsedJson });
+      } catch {
+        // Continue to fallback
+      }
+    }
+
+    return NextResponse.json({ assessment: null, fallback: true });
   } catch (err: any) {
-    console.warn('AI document assessment error:', err);
-    return NextResponse.json({ assessment: null, error: err?.message });
+    console.warn('AI document assessment error handled:', err?.message || err);
+    return NextResponse.json({ assessment: null, fallback: true });
   }
 }

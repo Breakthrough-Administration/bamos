@@ -98,9 +98,13 @@ export const createAuthSlice: StateCreator<RootStore, [], [], AuthSlice> = (set,
     set({ authLoading: true });
     try {
       let profile = await getUserProfile(firebaseUser.uid);
+      const emailLower = (firebaseUser.email || '').toLowerCase();
       const isSystemAdminEmail =
-        firebaseUser.email?.toLowerCase() === 'shivandharipersad@gmail.com' ||
-        firebaseUser.email?.toLowerCase().includes('admin@breakthrough');
+        emailLower === 'shivandharipersad@gmail.com' ||
+        emailLower.includes('admin@breakthrough') ||
+        emailLower.endsWith('@breakthroughconsult.com.au') ||
+        emailLower.endsWith('@breakthrough.org.au') ||
+        emailLower.startsWith('admin@');
 
       if (!profile) {
         const role: UserRole = isSystemAdminEmail ? 'ADMIN' : 'PENDING';

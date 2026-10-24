@@ -11,7 +11,7 @@ import {
   where,
   writeBatch
 } from 'firebase/firestore';
-import { db } from './firebase';
+import { db, auth } from './firebase';
 import {
   Client,
   CaseNote,
@@ -36,13 +36,97 @@ import {
 } from '@/types';
 import type { PickedGoogleDriveFile } from './googlePicker';
 
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  };
+}
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
+  const errMessage = error instanceof Error ? error.message : String(error);
+  const errInfo: FirestoreErrorInfo = {
+    error: errMessage,
+    authInfo: {
+      userId: auth?.currentUser?.uid || null,
+      email: auth?.currentUser?.email || null,
+      emailVerified: auth?.currentUser?.emailVerified || null,
+      isAnonymous: auth?.currentUser?.isAnonymous || null,
+      tenantId: auth?.currentUser?.tenantId || null,
+      providerInfo: auth?.currentUser?.providerData?.map((provider) => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
+/**
+ * Recursively removes undefined properties from an object or array so it can be safely written to Firestore.
+ * Firestore strictly rejects documents containing undefined values.
+ */
+export function sanitizeFirestoreData<T>(data: T): T {
+  if (data === null || data === undefined) {
+    return null as any;
+  }
+  if (Array.isArray(data)) {
+    return data
+      .filter((item) => item !== undefined)
+      .map((item) => sanitizeFirestoreData(item)) as any;
+  }
+  if (typeof data === 'object') {
+    // Preserve special Firestore objects or Dates
+    if (
+      data instanceof Date ||
+      (data as any)?._methodName ||
+      typeof (data as any)?.toMillis === 'function'
+    ) {
+      return data;
+    }
+    const sanitized: Record<string, any> = {};
+    for (const [key, val] of Object.entries(data as Record<string, any>)) {
+      if (val !== undefined) {
+        sanitized[key] = sanitizeFirestoreData(val);
+      }
+    }
+    return sanitized as T;
+  }
+  return data;
+}
+
 // Helper for generic collection fetch
 async function getCollectionDocs<T>(collectionName: string): Promise<T[]> {
   try {
     const colRef = collection(db, collectionName);
     const snap = await getDocs(colRef);
     return snap.docs.map((d) => ({ ...d.data(), id: d.id } as T));
-  } catch (err) {
+  } catch (err: any) {
+    if (err?.message?.includes('Missing or insufficient permissions') || err?.code === 'permission-denied') {
+      handleFirestoreError(err, OperationType.GET, collectionName);
+    }
     console.warn(`Firestore getCollectionDocs failed for ${collectionName}:`, err);
     return [];
   }
@@ -63,6 +147,9 @@ function subscribeToCollection<T>(
         onUpdate(items);
       },
       (err) => {
+        if (err?.message?.includes('Missing or insufficient permissions') || err?.code === 'permission-denied') {
+          handleFirestoreError(err, OperationType.GET, collectionName);
+        }
         console.warn(`Subscription error on ${collectionName}:`, err);
         if (onError) onError(err);
       }
@@ -75,14 +162,22 @@ function subscribeToCollection<T>(
 }
 
 // Helper for document write
-async function setDocumentData<T extends { id?: string }>(
+export async function setDocumentData<T extends { id?: string }>(
   collectionName: string,
   data: T,
   idOverride?: string
 ): Promise<void> {
   const id = idOverride || data.id || `doc-${Date.now()}`;
   const docRef = doc(db, collectionName, id);
-  await setDoc(docRef, data as any, { merge: true });
+  try {
+    const cleanData = sanitizeFirestoreData(data);
+    await setDoc(docRef, cleanData as any, { merge: true });
+  } catch (err: any) {
+    if (err?.message?.includes('Missing or insufficient permissions') || err?.code === 'permission-denied') {
+      handleFirestoreError(err, OperationType.WRITE, `${collectionName}/${id}`);
+    }
+    throw err;
+  }
 }
 
 // Helper for document update
@@ -92,13 +187,28 @@ async function updateDocumentData(
   updates: Record<string, any>
 ): Promise<void> {
   const docRef = doc(db, collectionName, id);
-  await updateDoc(docRef, updates);
+  try {
+    const cleanUpdates = sanitizeFirestoreData(updates);
+    await updateDoc(docRef, cleanUpdates);
+  } catch (err: any) {
+    if (err?.message?.includes('Missing or insufficient permissions') || err?.code === 'permission-denied') {
+      handleFirestoreError(err, OperationType.UPDATE, `${collectionName}/${id}`);
+    }
+    throw err;
+  }
 }
 
 // Helper for document delete
 async function deleteDocumentData(collectionName: string, id: string): Promise<void> {
   const docRef = doc(db, collectionName, id);
-  await deleteDoc(docRef);
+  try {
+    await deleteDoc(docRef);
+  } catch (err: any) {
+    if (err?.message?.includes('Missing or insufficient permissions') || err?.code === 'permission-denied') {
+      handleFirestoreError(err, OperationType.DELETE, `${collectionName}/${id}`);
+    }
+    throw err;
+  }
 }
 
 // Clients
@@ -119,9 +229,16 @@ export async function createClientsBatch(clients: Client[]): Promise<void> {
     const batch = writeBatch(db);
     for (const client of chunk) {
       const docRef = doc(db, 'clients', client.id);
-      batch.set(docRef, client, { merge: true });
+      batch.set(docRef, sanitizeFirestoreData(client), { merge: true });
     }
-    await batch.commit();
+    try {
+      await batch.commit();
+    } catch (err: any) {
+      if (err?.message?.includes('Missing or insufficient permissions') || err?.code === 'permission-denied') {
+        handleFirestoreError(err, OperationType.WRITE, 'clients');
+      }
+      throw err;
+    }
   }
 }
 
@@ -680,12 +797,13 @@ export async function recordDriveSyncLog(
 ): Promise<DriveSyncLog> {
   const id = log.id || `sync-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
   const timestamp = log.timestamp || new Date().toISOString();
-  const fullLog: DriveSyncLog = {
+  const rawLog: DriveSyncLog = {
     ...log,
     id,
     timestamp,
-    firestorePath: log.firestorePath || (log.fileId ? `/documents/${log.fileId}` : undefined)
+    ...(log.firestorePath || log.fileId ? { firestorePath: log.firestorePath || `/documents/${log.fileId}` } : {})
   };
+  const fullLog = sanitizeFirestoreData(rawLog);
 
   try {
     const logRef = doc(db, 'syncLogs', id);
@@ -731,20 +849,20 @@ export async function recordPickerSearchQuery(
 
     if (snap.exists()) {
       const existing = snap.data() as PickerSearchInsight;
-      await updateDoc(queryRef, {
+      await updateDoc(queryRef, sanitizeFirestoreData({
         count: (existing.count || 1) + 1,
         lastSearchedAt: now,
         lastPractitionerName: practitionerName || existing.lastPractitionerName || 'Clinician'
-      });
+      }));
     } else {
-      const newInsight: PickerSearchInsight = {
+      const newInsight: PickerSearchInsight = sanitizeFirestoreData({
         id: queryDocId,
         query: trimmed,
         count: 1,
         lastSearchedAt: now,
-        categorySuggestion: categorySuggestion || undefined,
+        ...(categorySuggestion ? { categorySuggestion } : {}),
         lastPractitionerName: practitionerName || 'Clinician'
-      };
+      });
       await setDoc(queryRef, newInsight);
     }
   } catch (err) {
@@ -823,7 +941,7 @@ export async function seedInitialFirestoreDataIfEmpty(seedData: Record<string, a
         for (const item of items.slice(0, 50)) {
           const id = item.id || `${collectionName}-${Math.random().toString(36).substring(2, 8)}`;
           const docRef = doc(db, collectionName, id);
-          batch.set(docRef, item, { merge: true });
+          batch.set(docRef, sanitizeFirestoreData(item), { merge: true });
           count++;
         }
       }
@@ -837,9 +955,7 @@ export async function seedInitialFirestoreDataIfEmpty(seedData: Record<string, a
   }
 }
 
-// ==========================================
-// Quick Notes (Google Keep Field Notes Collection)
-// ==========================================
+// Quick Notes for Google Keep Module
 export interface QuickNoteDoc {
   id: string;
   title: string;
@@ -851,16 +967,29 @@ export interface QuickNoteDoc {
   clientName?: string;
   isConverted?: boolean;
   convertedCaseNoteId?: string;
+  checklist?: { id?: string; text: string; completed: boolean }[];
+  receiptAmount?: number;
+  isScannedDoc?: boolean;
+  labels?: string[];
+  text?: string;
   createdAt?: string;
+  updatedAt?: string;
 }
 
-export const fetchQuickNotes = () => getCollectionDocs<QuickNoteDoc>('quickNotes');
-export const saveQuickNote = (data: QuickNoteDoc) => setDocumentData<QuickNoteDoc>('quickNotes', data);
-export const deleteQuickNote = (id: string) => deleteDocumentData('quickNotes', id);
-export const subscribeToQuickNotes = (
-  onUpdate: (data: QuickNoteDoc[]) => void,
+export function subscribeToQuickNotes(
+  onUpdate: (docs: QuickNoteDoc[]) => void,
   onError?: (err: Error) => void
-) => subscribeToCollection<QuickNoteDoc>('quickNotes', onUpdate, onError);
+): () => void {
+  return subscribeToCollection<QuickNoteDoc>('quickNotes', onUpdate, onError);
+}
+
+export async function saveQuickNote(note: QuickNoteDoc): Promise<void> {
+  await setDocumentData<QuickNoteDoc>('quickNotes', note);
+}
+
+export async function deleteQuickNote(id: string): Promise<void> {
+  await deleteDocumentData('quickNotes', id);
+}
 
 export async function convertQuickNoteToBIRPCaseNote(params: {
   note: QuickNoteDoc;
@@ -868,45 +997,89 @@ export async function convertQuickNoteToBIRPCaseNote(params: {
   clientName: string;
   practitionerId: string;
   practitionerName: string;
-  interventionText?: string;
-  responseText?: string;
-  planText?: string;
+  interventionText: string;
+  responseText: string;
+  planText: string;
 }): Promise<CaseNote> {
-  const { note, clientId, clientName, practitionerId, practitionerName, interventionText, responseText, planText } = params;
+  const now = new Date().toISOString();
   const caseNoteId = `cn-birp-${Date.now()}`;
-  const today = new Date().toISOString().split('T')[0];
-
-  const birpCaseNote: CaseNote = {
+  const caseNote: CaseNote = {
     id: caseNoteId,
-    clientId,
-    clientName,
-    practitionerId: practitionerId || 'prac-1',
-    practitionerName: practitionerName || 'Principal Clinician',
-    date: today,
-    format: 'BIRP',
-    category: 'Therapy Session',
+    clientId: params.clientId,
+    clientName: params.clientName,
+    practitionerId: params.practitionerId,
+    practitionerName: params.practitionerName,
+    date: now.split('T')[0],
+    startTime: '10:00',
+    endTime: '11:00',
     sessionDurationMinutes: 60,
-    nonFaceToFaceMinutes: 15,
-    subjective: `[Behavior]: ${note.content}`, // Behavior
-    objective: interventionText || `[Intervention]: Applied positive reinforcement and sensory regulation protocols based on field observation: "${note.title}".`, // Intervention
-    assessment: responseText || `[Response]: Participant engaged positively, demonstrated reduced anxiety and regulated breathing.`, // Response
-    plan: planText || `[Plan]: Continue scheduled capacity building sessions. Review BSP proactive strategies and follow up next session.`, // Plan
+    durationMinutes: 60,
+    format: 'BIRP',
+    category: 'Capacity Building - Improved Daily Living',
+    subjective: params.note.content,
+    objective: params.interventionText,
+    assessment: params.responseText,
+    plan: params.planText,
+    content: `${params.note.title}\n${params.note.content}`,
+    intervention: params.interventionText,
     linkedGoalIds: [],
-    riskLevel: 'Low'
+    flaggedForReview: false,
+    status: 'Approved',
+    createdAt: now,
+    updatedAt: now
   };
 
-  // 1. Save case note to Firestore
-  await setDocumentData<CaseNote>('caseNotes', birpCaseNote);
+  await setDocumentData<CaseNote>('caseNotes', caseNote);
 
-  // 2. Mark quickNote as converted in Firestore
-  await updateDocumentData('quickNotes', note.id, {
+  // Mark quickNote as converted
+  await updateDocumentData('quickNotes', params.note.id, {
     isConverted: true,
     convertedCaseNoteId: caseNoteId,
-    clientId,
-    clientName
+    clientName: params.clientName,
+    updatedAt: now
   });
 
-  return birpCaseNote;
+  return caseNote;
+}
+
+// ==========================================
+// Participant Session Feedback
+// ==========================================
+export interface ParticipantFeedbackDoc {
+  id: string;
+  participantId: string;
+  participantName: string;
+  practitionerId: string;
+  practitionerName: string;
+  sessionDate: string;
+  sessionType: string;
+  overallRating: number; // 1 to 5
+  sentiment: 'Delighted' | 'Good' | 'Neutral' | 'Needs Attention';
+  highlights?: string[];
+  notesToPractitioner: string;
+  requestFollowUp: boolean;
+  submittedBy: 'Participant' | 'Nominee / Carer';
+  status: 'Submitted' | 'Reviewed' | 'Acknowledged';
+  createdAt: string;
+  practitionerResponseNote?: string;
+}
+
+export function subscribeToParticipantFeedback(
+  participantId: string,
+  onUpdate: (docs: ParticipantFeedbackDoc[]) => void,
+  onError?: (err: Error) => void
+): () => void {
+  return subscribeToCollection<ParticipantFeedbackDoc>(
+    'participant_feedback',
+    (all) => {
+      onUpdate(all.filter((f) => f.participantId === participantId));
+    },
+    onError
+  );
+}
+
+export async function saveParticipantFeedback(feedback: ParticipantFeedbackDoc): Promise<void> {
+  await setDocumentData<ParticipantFeedbackDoc>('participant_feedback', feedback);
 }
 
 

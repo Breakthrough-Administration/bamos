@@ -175,9 +175,8 @@ export async function verifyAuthToken(
       try {
         const databaseId =
           process.env.FIRESTORE_DATABASE_ID ||
-          process.env.NEXT_PUBLIC_FIRESTORE_DATABASE_ID ||
-          'ai-studio-amos-2f422ba5-7cb0-48ad-bac6-be491064bb5d';
-        const firestore = getFirestore(app, databaseId);
+          process.env.NEXT_PUBLIC_FIRESTORE_DATABASE_ID;
+        const firestore = databaseId ? getFirestore(app, databaseId) : getFirestore(app);
         const userDoc = await firestore.collection('users').doc(uid).get();
         if (userDoc.exists) {
           const data = userDoc.data();

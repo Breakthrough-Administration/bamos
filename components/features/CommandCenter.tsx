@@ -54,7 +54,7 @@ export const CommandCenter: React.FC = () => {
 
         <div className="flex flex-wrap gap-2.5">
           <button
-            onClick={() => setActiveTab('hr')}
+            onClick={() => setActiveTab('hr-roster')}
             className="px-4 py-2.5 rounded-2xl bg-indigo-950/60 hover:bg-indigo-900/80 text-indigo-200 text-xs font-bold transition-colors border border-indigo-500/40 flex items-center gap-2 shadow-sm"
             title="Two-Way Google Calendar shift sync with MMM travel buffers"
           >
