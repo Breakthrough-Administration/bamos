@@ -5,11 +5,10 @@ import {
   updateIncident as updateIncidentDoc,
   deleteIncident as deleteIncidentDoc
 } from '@/lib/firestoreService';
-import { INITIAL_INCIDENTS } from '@/lib/seedData';
 import { IncidentsSlice, RootStore } from '../types';
 
 export const createIncidentsSlice: StateCreator<RootStore, [], [], IncidentsSlice> = (set, get) => ({
-  incidents: INITIAL_INCIDENTS,
+  incidents: [],
 
   addIncident: (incidentData) => {
     const newIncident: Incident = {

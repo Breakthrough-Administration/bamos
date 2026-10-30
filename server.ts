@@ -8,12 +8,14 @@ import next from 'next';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const hasCompleteBuild =
-  fs.existsSync(path.join(__dirname, '.next', 'routes-manifest.json')) &&
-  fs.existsSync(path.join(__dirname, '.next', 'server', 'app-paths-manifest.json')) &&
-  fs.existsSync(path.join(__dirname, '.next', 'build-manifest.json'));
+const projectDir = process.cwd();
 
-const dev = process.env.NODE_ENV !== 'production' || !hasCompleteBuild;
+const hasCompleteBuild =
+  fs.existsSync(path.join(projectDir, '.next', 'routes-manifest.json')) &&
+  fs.existsSync(path.join(projectDir, '.next', 'server', 'app-paths-manifest.json')) &&
+  fs.existsSync(path.join(projectDir, '.next', 'build-manifest.json'));
+
+const dev = process.env.NODE_ENV !== 'production' && !hasCompleteBuild;
 const hostname = '0.0.0.0';
 const port = parseInt(process.env.PORT || '3000', 10);
 
@@ -21,10 +23,10 @@ const app = next({
   dev,
   hostname,
   port,
-  dir: __dirname,
+  dir: projectDir,
 });
 
-let handle = app.getRequestHandler();
+const handle = app.getRequestHandler();
 let isReady = false;
 
 // Prepare Next.js app in background
@@ -36,15 +38,7 @@ const preparePromise = app
   })
   .catch((err) => {
     console.error('Error during app.prepare():', err);
-    if (!dev) {
-      console.warn('Falling back to on-demand dev mode...');
-      const fallbackApp = next({ dev: true, hostname, port, dir: __dirname });
-      handle = fallbackApp.getRequestHandler();
-      return fallbackApp.prepare().then(() => {
-        isReady = true;
-        console.log('> Fallback Next.js ready');
-      });
-    }
+    throw err;
   });
 
 // Start HTTP server immediately to satisfy Cloud Run deployment health checks

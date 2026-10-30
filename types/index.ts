@@ -30,6 +30,7 @@ export interface UserProfile {
 export interface ClientGoal {
   id: string;
   title: string;
+  description?: string;
   category: 'Core' | 'Capacity Building' | 'Capital' | 'Social & Community' | string;
   targetDate: string;
   progressPercent: number;

@@ -8,12 +8,11 @@ import {
   updateCRMTask as updateCRMTaskDoc,
   deleteCRMTask as deleteCRMTaskDoc
 } from '@/lib/firestoreService';
-import { INITIAL_LEADS, INITIAL_CRM_TASKS } from '@/lib/seedData';
 import { CRMSlice, RootStore } from '../types';
 
 export const createCRMSlice: StateCreator<RootStore, [], [], CRMSlice> = (set, get) => ({
-  leads: INITIAL_LEADS,
-  crmTasks: INITIAL_CRM_TASKS,
+  leads: [],
+  crmTasks: [],
 
   addLead: (leadData) => {
     const newLead: Lead = {

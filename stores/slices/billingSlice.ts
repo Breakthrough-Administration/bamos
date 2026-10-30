@@ -5,12 +5,11 @@ import {
   updateBillingClaim as updateBillingClaimDoc,
   deleteBillingClaim as deleteBillingClaimDoc
 } from '@/lib/firestoreService';
-import { INITIAL_CLAIMS } from '@/lib/seedData';
 import { BillingSlice, RootStore } from '../types';
 
 export const createBillingSlice: StateCreator<RootStore, [], [], BillingSlice> = (set, get) => ({
-  billingClaims: INITIAL_CLAIMS,
-  claims: INITIAL_CLAIMS,
+  billingClaims: [],
+  claims: [],
 
   addBillingClaim: (claimData) => {
     const invoiceNum = (claimData as BillingClaim).invoiceNumber || `INV-BK-2026-${Math.floor(1000 + Math.random() * 9000)}`;

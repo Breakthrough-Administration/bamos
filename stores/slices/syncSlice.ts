@@ -348,132 +348,44 @@ export const createSyncSlice: StateCreator<RootStore, [], [], SyncSlice> = (set,
         fetchNotifications().catch(() => [])
       ]);
 
-      const hasAnyData =
-        fetchedClients.length > 0 ||
-        fetchedCaseNotes.length > 0 ||
-        fetchedClaims.length > 0 ||
-        fetchedIncidents.length > 0 ||
-        fetchedPracs.length > 0 ||
-        fetchedLeads.length > 0;
+      const seed = await import('@/lib/seedData');
+      // Filter out any mock participants so the workspace is strictly production
+      const realClients = fetchedClients.filter(
+        (c) =>
+          !c.id.startsWith('cli-') &&
+          c.isCompanyDriveParticipant !== true &&
+          !c.id.startsWith('client-mock') &&
+          !['Ben Rusic', 'Milly Kane', 'Cooper Brooks', 'Reuben Turner', 'Reyansh Chawla'].includes(c.name)
+      );
 
-      if (!hasAnyData) {
-        console.info('Firestore is empty. Dynamically loading seed dataset...');
-        const seed = await import('@/lib/seedData');
-
-        await seedInitialFirestoreDataIfEmpty({
-          users: seed.INITIAL_USERS,
-          clients: seed.INITIAL_CLIENTS,
-          caseNotes: seed.INITIAL_CASE_NOTES,
-          billingClaims: seed.INITIAL_CLAIMS,
-          incidents: seed.INITIAL_INCIDENTS,
-          restrictivePractices: seed.INITIAL_RESTRICTIVE_PRACTICES,
-          abcLogs: seed.INITIAL_ABC_LOGS,
-          bspDocuments: [seed.INITIAL_BSP],
-          leads: seed.INITIAL_LEADS,
-          crmTasks: seed.INITIAL_CRM_TASKS,
-          practitioners: seed.INITIAL_PRACTITIONERS,
-          supportItems: seed.OFFICIAL_2026_NDIS_PRICE_GUIDE,
-          auditLogs: seed.INITIAL_AUDIT_LOGS,
-          notifications: seed.INITIAL_NOTIFICATIONS
-        });
-
-        const [
-          reClients,
-          reNotes,
-          reClaims,
-          reIncidents,
-          reRP,
-          reABC,
-          reBSP,
-          reLeads,
-          reTasks,
-          rePracs,
-          reItems,
-          reAudits,
-          reShifts,
-          reUsers,
-          reNotifications
-        ] = await Promise.all([
-          fetchClients().catch(() => seed.INITIAL_CLIENTS),
-          fetchCaseNotes().catch(() => seed.INITIAL_CASE_NOTES),
-          fetchBillingClaims().catch(() => seed.INITIAL_CLAIMS),
-          fetchIncidents().catch(() => seed.INITIAL_INCIDENTS),
-          fetchRestrictivePractices().catch(() => seed.INITIAL_RESTRICTIVE_PRACTICES),
-          fetchABCLogs().catch(() => seed.INITIAL_ABC_LOGS),
-          fetchBSPDocuments().catch(() => [seed.INITIAL_BSP]),
-          fetchCRMLeads().catch(() => seed.INITIAL_LEADS),
-          fetchCRMTasks().catch(() => seed.INITIAL_CRM_TASKS),
-          fetchPractitioners().catch(() => seed.INITIAL_PRACTITIONERS),
-          fetchSupportItems().catch(() => seed.OFFICIAL_2026_NDIS_PRICE_GUIDE),
-          fetchAuditLogs().catch(() => seed.INITIAL_AUDIT_LOGS),
-          fetchScheduledShifts().catch(() => []),
-          fetchUsers().catch(() => seed.INITIAL_USERS),
-          fetchNotifications().catch(() => seed.INITIAL_NOTIFICATIONS)
-        ]);
-
-        set({
-          clients: reClients.length > 0 ? reClients : seed.INITIAL_CLIENTS,
-          caseNotes: reNotes.length > 0 ? reNotes : seed.INITIAL_CASE_NOTES,
-          billingClaims: reClaims.length > 0 ? reClaims : seed.INITIAL_CLAIMS,
-          claims: reClaims.length > 0 ? reClaims : seed.INITIAL_CLAIMS,
-          incidents: reIncidents.length > 0 ? reIncidents : seed.INITIAL_INCIDENTS,
-          restrictivePractices: reRP.length > 0 ? reRP : seed.INITIAL_RESTRICTIVE_PRACTICES,
-          abcLogs: reABC.length > 0 ? reABC : seed.INITIAL_ABC_LOGS,
-          bspDocuments: reBSP.length > 0 ? reBSP : [seed.INITIAL_BSP],
-          bspPlans: reBSP.length > 0 ? reBSP : [seed.INITIAL_BSP],
-          bsp: reBSP[0] || seed.INITIAL_BSP,
-          leads: reLeads.length > 0 ? reLeads : seed.INITIAL_LEADS,
-          crmTasks: reTasks.length > 0 ? reTasks : seed.INITIAL_CRM_TASKS,
-          practitioners: rePracs.length > 0 ? rePracs : seed.INITIAL_PRACTITIONERS,
-          supportItems: reItems.length > 0 ? reItems : seed.OFFICIAL_2026_NDIS_PRICE_GUIDE,
-          auditLogs: reAudits.length > 0 ? reAudits : seed.INITIAL_AUDIT_LOGS,
-          notifications: reNotifications.length > 0 ? reNotifications : seed.INITIAL_NOTIFICATIONS,
-          scheduledShifts: reShifts,
-          users: reUsers.length > 0 ? reUsers : seed.INITIAL_USERS,
-          isUsingMockData: false,
-          syncStatus: 'synced',
-          lastSyncTime: new Date().toISOString()
-        });
-      } else {
-        const seed = await import('@/lib/seedData');
-        // Filter out any leftover mock participants so the workspace is strictly production
-        const realClients = fetchedClients.filter(
-          (c) =>
-            !c.id.startsWith('cli-') &&
-            c.isCompanyDriveParticipant !== true &&
-            !c.id.startsWith('client-mock') &&
-            !['Ben Rusic', 'Milly Kane', 'Cooper Brooks', 'Reuben Turner', 'Reyansh Chawla'].includes(c.name)
-        );
-
-        if (realClients.length < fetchedClients.length) {
-          const { purgeMockDataFromFirestore } = await import('@/lib/firestoreService');
-          purgeMockDataFromFirestore().catch(() => {});
-        }
-
-        set({
-          clients: realClients,
-          caseNotes: fetchedCaseNotes.length > 0 ? fetchedCaseNotes : seed.INITIAL_CASE_NOTES,
-          billingClaims: fetchedClaims.length > 0 ? fetchedClaims : seed.INITIAL_CLAIMS,
-          claims: fetchedClaims.length > 0 ? fetchedClaims : seed.INITIAL_CLAIMS,
-          incidents: fetchedIncidents.length > 0 ? fetchedIncidents : seed.INITIAL_INCIDENTS,
-          restrictivePractices: fetchedRP.length > 0 ? fetchedRP : seed.INITIAL_RESTRICTIVE_PRACTICES,
-          abcLogs: fetchedABC.length > 0 ? fetchedABC : seed.INITIAL_ABC_LOGS,
-          bspDocuments: fetchedBSP.length > 0 ? fetchedBSP : [seed.INITIAL_BSP],
-          bspPlans: fetchedBSP.length > 0 ? fetchedBSP : [seed.INITIAL_BSP],
-          bsp: fetchedBSP[0] || seed.INITIAL_BSP,
-          leads: fetchedLeads.length > 0 ? fetchedLeads : seed.INITIAL_LEADS,
-          crmTasks: fetchedTasks.length > 0 ? fetchedTasks : seed.INITIAL_CRM_TASKS,
-          practitioners: fetchedPracs.length > 0 ? fetchedPracs : seed.INITIAL_PRACTITIONERS,
-          supportItems: fetchedSupportItems.length > 0 ? fetchedSupportItems : seed.OFFICIAL_2026_NDIS_PRICE_GUIDE,
-          auditLogs: fetchedAuditLogs.length > 0 ? fetchedAuditLogs : seed.INITIAL_AUDIT_LOGS,
-          notifications: fetchedNotifications.length > 0 ? fetchedNotifications : seed.INITIAL_NOTIFICATIONS,
-          scheduledShifts: fetchedShifts,
-          users: fetchedUsers.length > 0 ? fetchedUsers : seed.INITIAL_USERS,
-          isUsingMockData: false,
-          syncStatus: 'synced',
-          lastSyncTime: new Date().toISOString()
-        });
+      if (realClients.length < fetchedClients.length) {
+        const { purgeMockDataFromFirestore } = await import('@/lib/firestoreService');
+        purgeMockDataFromFirestore().catch(() => {});
       }
+
+      set({
+        clients: realClients,
+        caseNotes: fetchedCaseNotes,
+        billingClaims: fetchedClaims,
+        claims: fetchedClaims,
+        incidents: fetchedIncidents,
+        restrictivePractices: fetchedRP,
+        abcLogs: fetchedABC,
+        bspDocuments: fetchedBSP,
+        bspPlans: fetchedBSP,
+        bsp: fetchedBSP[0] || null,
+        leads: fetchedLeads,
+        crmTasks: fetchedTasks,
+        practitioners: fetchedPracs,
+        supportItems: fetchedSupportItems.length > 0 ? fetchedSupportItems : seed.OFFICIAL_2026_NDIS_PRICE_GUIDE,
+        auditLogs: fetchedAuditLogs,
+        notifications: fetchedNotifications,
+        scheduledShifts: fetchedShifts,
+        users: fetchedUsers,
+        isUsingMockData: false,
+        syncStatus: 'synced',
+        lastSyncTime: new Date().toISOString()
+      });
     } catch (error) {
       console.warn('Failed to sync with Firestore, operating in cached mode:', error);
       set({ syncStatus: 'offline' });

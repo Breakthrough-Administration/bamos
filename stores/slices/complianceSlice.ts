@@ -11,15 +11,14 @@ import {
   updateBSPDocument as updateBSPDocumentDoc,
   deleteBSPDocument as deleteBSPDocumentDoc
 } from '@/lib/firestoreService';
-import { INITIAL_RESTRICTIVE_PRACTICES, INITIAL_ABC_LOGS, INITIAL_BSP } from '@/lib/seedData';
 import { ComplianceSlice, RootStore } from '../types';
 
 export const createComplianceSlice: StateCreator<RootStore, [], [], ComplianceSlice> = (set, get) => ({
-  restrictivePractices: INITIAL_RESTRICTIVE_PRACTICES,
-  abcLogs: INITIAL_ABC_LOGS,
-  bsp: INITIAL_BSP,
-  bspPlans: [INITIAL_BSP],
-  bspDocuments: [INITIAL_BSP],
+  restrictivePractices: [],
+  abcLogs: [],
+  bsp: null as any,
+  bspPlans: [],
+  bspDocuments: [],
 
   addRestrictivePractice: (practiceData) => {
     const newPractice: RestrictivePractice = {

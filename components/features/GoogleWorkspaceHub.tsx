@@ -19,10 +19,14 @@ import {
   FileCheck,
   Sparkles,
   ShieldCheck,
+  Briefcase,
+  FolderOpen,
   X
 } from 'lucide-react';
 import { GoogleDrivePickerWidget } from './GoogleDrivePickerWidget';
 import { GoogleDrivePreviewModal } from './GoogleDrivePreviewModal';
+import { GoogleDriveFolderIngestModal } from './GoogleDriveFolderIngestModal';
+import { SeventeenHatsModal } from './SeventeenHatsModal';
 import { FolderSyncManager } from './FolderSyncManager';
 import { StartupHealthBanner } from './StartupHealthBanner';
 import { WorkspaceSearchInsights } from './WorkspaceSearchInsights';
@@ -67,6 +71,8 @@ export const GoogleWorkspaceHub: React.FC = () => {
   const [previewDocument, setPreviewDocument] = useState<AttachedDocument | PickedGoogleDriveFile | null>(null);
   const [previewClientId, setPreviewClientId] = useState<string | undefined>(undefined);
   const [previewCategory, setPreviewCategory] = useState<DocumentCategory | undefined>(undefined);
+  const [isDriveIngestOpen, setIsDriveIngestOpen] = useState(false);
+  const [isSeventeenHatsOpen, setIsSeventeenHatsOpen] = useState(false);
 
   // Load last 5 recent linked files from Firestore
   const loadRecentFiles = useCallback(async () => {
@@ -317,7 +323,23 @@ export const GoogleWorkspaceHub: React.FC = () => {
             Bidirectional synchronization between Breakthrough clinical records and Google Workspace
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            onClick={() => setIsDriveIngestOpen(true)}
+            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs transition shadow-lg shadow-teal-500/20"
+          >
+            <FolderOpen className="w-3.5 h-3.5" />
+            <span>Ingest Participant Folder</span>
+          </button>
+
+          <button
+            onClick={() => setIsSeventeenHatsOpen(true)}
+            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 font-semibold text-xs transition"
+          >
+            <Briefcase className="w-3.5 h-3.5 text-amber-400" />
+            <span>17hats Sync</span>
+          </button>
+
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-500/10 text-teal-300 border border-teal-500/20 text-xs font-semibold">
             <ShieldCheck className="w-3.5 h-3.5 text-teal-400" />
             <span>Google Drive API v3 & Picker Active</span>
@@ -718,6 +740,22 @@ export const GoogleWorkspaceHub: React.FC = () => {
             // Refetch recent files upon successful link
             loadRecentFiles();
           }}
+        />
+      )}
+
+      {/* Google Drive Folder Ingest Modal */}
+      {isDriveIngestOpen && (
+        <GoogleDriveFolderIngestModal
+          isOpen={isDriveIngestOpen}
+          onClose={() => setIsDriveIngestOpen(false)}
+        />
+      )}
+
+      {/* 17hats CRM Integration Modal */}
+      {isSeventeenHatsOpen && (
+        <SeventeenHatsModal
+          isOpen={isSeventeenHatsOpen}
+          onClose={() => setIsSeventeenHatsOpen(false)}
         />
       )}
     </div>

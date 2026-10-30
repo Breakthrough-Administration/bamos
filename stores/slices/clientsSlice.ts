@@ -7,11 +7,10 @@ import {
   deleteClient as deleteClientDoc,
   updateCaseNote as updateCaseNoteDoc
 } from '@/lib/firestoreService';
-import { INITIAL_CLIENTS } from '@/lib/seedData';
 import { ClientsSlice, RootStore } from '../types';
 
 export const createClientsSlice: StateCreator<RootStore, [], [], ClientsSlice> = (set, get) => ({
-  clients: INITIAL_CLIENTS,
+  clients: [],
   selectedClientId: null,
 
   setSelectedClientId: (selectedClientId) => set({ selectedClientId }),

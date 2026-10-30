@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev -p 3000 -H 0.0.0.0",
-    "build": "NODE_ENV=production next build",
+    "build": "next build && node scripts/prepare-artifacts.mjs",
     "start": "node server.ts",
     "test": "node tests/runner.mjs",
     "lint": "next lint"

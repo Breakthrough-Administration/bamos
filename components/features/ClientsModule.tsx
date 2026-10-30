@@ -7,10 +7,13 @@ import { STANDARD_DRIVE_SUBFOLDERS } from '@/lib/seedData';
 import { openGoogleDrivePicker, PickedGoogleDriveFile } from '@/lib/googlePicker';
 import { GoogleDrivePreviewModal } from './GoogleDrivePreviewModal';
 import { BulkParticipantImporter } from './BulkParticipantImporter';
+import { GoogleDriveFolderIngestModal } from './GoogleDriveFolderIngestModal';
+import { SeventeenHatsModal } from './SeventeenHatsModal';
 import {
   Users,
   Search,
   Plus,
+  Briefcase,
   Phone,
   Mail,
   MapPin,
@@ -56,6 +59,8 @@ export const ClientsModule: React.FC = () => {
   const [isSyncingDrive, setIsSyncingDrive] = useState(false);
   const [syncSuccessMessage, setSyncSuccessMessage] = useState<string | null>(null);
   const [isBulkImporterOpen, setIsBulkImporterOpen] = useState(false);
+  const [isDriveIngestOpen, setIsDriveIngestOpen] = useState(false);
+  const [isSeventeenHatsOpen, setIsSeventeenHatsOpen] = useState(false);
 
   // Preview Modal state
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
@@ -227,22 +232,33 @@ export const ClientsModule: React.FC = () => {
 
         <div className="flex items-center gap-2.5 flex-wrap">
           <button
-            onClick={() => setIsBulkImporterOpen(true)}
-            className="px-4 py-2 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold transition-all shadow-lg shadow-teal-600/20 flex items-center gap-2"
-            title="Bulk import participants from CSV or Excel file with field mapping & error validation"
+            onClick={() => setIsDriveIngestOpen(true)}
+            className="px-4 py-2 rounded-2xl bg-teal-500 hover:bg-teal-400 text-slate-950 text-xs font-bold transition-all shadow-lg shadow-teal-500/20 flex items-center gap-2"
+            title="Ingest participant folder from Google Drive and extract clinical profile via Gemini 2.5 Flash"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5" />
-            <span>Bulk Import (CSV/Excel)</span>
+            <FolderOpen className="w-3.5 h-3.5" />
+            <span>Ingest Drive Folder</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-900/40 text-slate-950 font-extrabold uppercase tracking-wider">
+              Gemini AI
+            </span>
           </button>
 
           <button
-            onClick={handleSyncCompanyParticipants}
-            disabled={isSyncingDrive}
-            className="px-4 py-2 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-lg shadow-indigo-600/20 flex items-center gap-2"
-            title="Import all 17 participants from Breakthrough Staff Share Drive > Behaviour Support"
+            onClick={() => setIsSeventeenHatsOpen(true)}
+            className="px-4 py-2 rounded-2xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-bold transition-all flex items-center gap-2"
+            title="Synchronize contacts, intake questionnaires, and leads with 17hats"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isSyncingDrive ? 'animate-spin' : ''}`} />
-            {isSyncingDrive ? 'Syncing Drive...' : 'Sync Company Drive (17)'}
+            <Briefcase className="w-3.5 h-3.5 text-amber-400" />
+            <span>17hats Sync</span>
+          </button>
+
+          <button
+            onClick={() => setIsBulkImporterOpen(true)}
+            className="px-4 py-2 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-bold transition-all flex items-center gap-2"
+            title="Bulk import participants from CSV or Excel file with field mapping & error validation"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            <span>Bulk CSV/Excel</span>
           </button>
 
           <button
@@ -326,13 +342,24 @@ export const ClientsModule: React.FC = () => {
           {filtered.length === 0 ? (
             <div className="p-8 text-center rounded-2xl border border-slate-800 bg-slate-900/50 space-y-3">
               <Users className="w-8 h-8 text-slate-600 mx-auto" />
-              <p className="text-xs text-slate-400">No participants match your search criteria.</p>
-              <button
-                onClick={handleSyncCompanyParticipants}
-                className="px-3.5 py-1.5 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 text-xs font-bold border border-indigo-500/40 inline-flex items-center gap-1.5"
-              >
-                <HardDrive className="w-3 h-3" /> Load 17 Company Participants
-              </button>
+              <p className="text-xs text-slate-300 font-medium">No live participants found.</p>
+              <p className="text-[11px] text-slate-500">
+                Import participant clinical folders from your Google Drive or sync contacts from 17hats.
+              </p>
+              <div className="flex flex-col gap-2 pt-2">
+                <button
+                  onClick={() => setIsDriveIngestOpen(true)}
+                  className="px-3.5 py-2 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 text-xs font-bold shadow-lg shadow-teal-500/20 inline-flex items-center justify-center gap-1.5"
+                >
+                  <FolderOpen className="w-3.5 h-3.5" /> Ingest from Google Drive
+                </button>
+                <button
+                  onClick={() => setIsSeventeenHatsOpen(true)}
+                  className="px-3.5 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-bold border border-amber-500/30 inline-flex items-center justify-center gap-1.5"
+                >
+                  <Briefcase className="w-3.5 h-3.5" /> Sync from 17hats CRM
+                </button>
+              </div>
             </div>
           ) : (
             filtered.map((c) => {
@@ -822,19 +849,20 @@ export const ClientsModule: React.FC = () => {
         />
       )}
 
-      {/* Bulk Participant Importer Modal */}
-      {isBulkImporterOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="max-w-6xl w-full my-8">
-            <BulkParticipantImporter
-              isOpen={isBulkImporterOpen}
-              onClose={() => setIsBulkImporterOpen(false)}
-              onSuccessNavigate={() => {
-                setIsBulkImporterOpen(false);
-              }}
-            />
-          </div>
-        </div>
+      {/* Google Drive Folder Ingest Modal */}
+      {isDriveIngestOpen && (
+        <GoogleDriveFolderIngestModal
+          isOpen={isDriveIngestOpen}
+          onClose={() => setIsDriveIngestOpen(false)}
+        />
+      )}
+
+      {/* 17hats CRM Integration Modal */}
+      {isSeventeenHatsOpen && (
+        <SeventeenHatsModal
+          isOpen={isSeventeenHatsOpen}
+          onClose={() => setIsSeventeenHatsOpen(false)}
+        />
       )}
     </div>
   );

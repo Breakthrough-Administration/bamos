@@ -5,11 +5,10 @@ import {
   updateCaseNote as updateCaseNoteDoc,
   deleteCaseNote as deleteCaseNoteDoc
 } from '@/lib/firestoreService';
-import { INITIAL_CASE_NOTES } from '@/lib/seedData';
 import { CaseNotesSlice, RootStore } from '../types';
 
 export const createCaseNotesSlice: StateCreator<RootStore, [], [], CaseNotesSlice> = (set, get) => ({
-  caseNotes: INITIAL_CASE_NOTES,
+  caseNotes: [],
 
   addCaseNote: (noteData) => {
     const newNote: CaseNote = {
