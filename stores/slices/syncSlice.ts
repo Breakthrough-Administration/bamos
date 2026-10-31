@@ -262,27 +262,39 @@ export const createSyncSlice: StateCreator<RootStore, [], [], SyncSlice> = (set,
     import('@/lib/seedData').then((seed) => {
       set({
         isUsingMockData: true,
-        currentUser: seed.INITIAL_USERS[0],
+        currentUser: get().currentUser || seed.INITIAL_USERS[0],
         users: seed.INITIAL_USERS,
-        clients: seed.INITIAL_CLIENTS,
-        caseNotes: seed.INITIAL_CASE_NOTES,
-        restrictivePractices: seed.INITIAL_RESTRICTIVE_PRACTICES,
-        incidents: seed.INITIAL_INCIDENTS,
-        leads: seed.INITIAL_LEADS,
+        clients: seed.SAMPLE_CLIENTS,
+        selectedClientId: seed.SAMPLE_CLIENTS[0]?.id || null,
+        caseNotes: seed.SAMPLE_CASE_NOTES,
+        restrictivePractices: seed.SAMPLE_RESTRICTIVE_PRACTICES,
+        incidents: seed.SAMPLE_INCIDENTS,
+        leads: seed.SAMPLE_LEADS,
         crmTasks: seed.INITIAL_CRM_TASKS,
-        practitioners: seed.INITIAL_PRACTITIONERS,
-        abcLogs: seed.INITIAL_ABC_LOGS,
-        bsp: seed.INITIAL_BSP,
-        bspPlans: [seed.INITIAL_BSP],
-        bspDocuments: [seed.INITIAL_BSP],
-        claims: seed.INITIAL_CLAIMS,
-        billingClaims: seed.INITIAL_CLAIMS,
+        practitioners: seed.SAMPLE_PRACTITIONERS,
+        abcLogs: seed.SAMPLE_ABC_LOGS,
+        bsp: seed.SAMPLE_BSP_DOCUMENTS[0] || seed.INITIAL_BSP,
+        bspPlans: seed.SAMPLE_BSP_DOCUMENTS,
+        bspDocuments: seed.SAMPLE_BSP_DOCUMENTS,
+        claims: seed.SAMPLE_CLAIMS,
+        billingClaims: seed.SAMPLE_CLAIMS,
         supportItems: seed.OFFICIAL_2026_NDIS_PRICE_GUIDE,
         auditLogs: seed.INITIAL_AUDIT_LOGS,
-        notifications: seed.INITIAL_NOTIFICATIONS,
+        notifications: seed.SAMPLE_NOTIFICATIONS,
         scheduledShifts: []
       });
-      get().addAuditLog('RESTORE_DEMO_DATA', 'DatabaseEngine', 'db-root', 'Loaded sample NDIS demo database');
+      get().addAuditLog(
+        'RESTORE_DEMO_DATA',
+        'DatabaseEngine',
+        'db-root',
+        `Loaded sample NDIS clinical practice dataset (${seed.SAMPLE_CLIENTS.length} participants, ${seed.SAMPLE_CASE_NOTES.length} signed notes, ${seed.SAMPLE_CLAIMS.length} claims)`
+      );
+      get().addNotification({
+        title: 'Sample NDIS Practice Dataset Loaded',
+        message: 'Populated 3 active participants, clinical notes, ABC logs, BSPs, and PRODA claims for immediate exploration.',
+        type: 'compliance',
+        severity: 'low'
+      });
     });
   },
 

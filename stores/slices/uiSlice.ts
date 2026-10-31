@@ -3,7 +3,7 @@ import { UISlice, RootStore } from '../types';
 
 export const createUISlice: StateCreator<RootStore, [], [], UISlice> = (set) => ({
   theme: 'dark',
-  activeTab: 'google-workspace',
+  activeTab: 'command-center',
   searchTerm: '',
   isCommandPaletteOpen: false,
   isMobileSidebarOpen: false,

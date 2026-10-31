@@ -1,110 +1,50 @@
-# Implementation Plan: Live Data Migration, Drive Ingestion & Integrations Hardening
+# Implementation Plan: CommandCenter Quick Action Menu & Participant Clinical Timeline
 
-## 1. Executive Overview & User Alignment
-The goal of this initiative is to transition the Breakthrough Allied Health & NDIS Operations OS from initial development prototypes to an operational production system:
-1. **Purge All Mock Data**: Remove all hardcoded dummy participants, case notes, BSP documents, and billing records from default store initializations so the app starts cleanly with live Firestore collections.
-2. **Google Drive Participant Ingestion Engine**: Implement an automated folder ingestion pipeline that connects to the user's Google Drive, reads individual participant folders, extracts structured clinical information (NDIS numbers, funding budgets, support goals, emergency contacts, medical diagnoses) from PDFs and clinical documents using Gemini 2.5 Flash, and creates validated records in Firestore.
-3. **17hats API Key Server-Side Sync**: Integrate 17hats via secure server-side API key authentication (`/api/integrations/17hats/sync`) to synchronize contacts, client intake leads, appointments, and workflow projects.
-4. **Xero Accounting Integration**: Finalize OAuth token exchange and automatic invoice reconciliation for NDIS claims.
-5. **Google Workspace Hardening**: Unify Google Drive Picker, Drive File reading, Google Calendar scheduling, and Gmail communication under authorized client tokens.
+## 1. Overview & Objectives
+We will enhance **Breakthrough OS** with two high-velocity clinical workflow upgrades while maintaining strict build and runtime stability across the Next.js workspace:
 
----
-
-## 2. Architecture & Visual Layout Contract
-Following SaaS & Clinical Dashboard standards:
-- **Workspace Navigation**: Persistent 260px sidebar with high-contrast active states (`bg-teal-500/10 text-teal-400 border-l-2 border-teal-400`) and top header with live synchronization indicators and active user credential status.
-- **Data Density**: High-density participant data grid ($36\text{px}$–$44\text{px}$ row height) with sticky header, column sorting, search filters, and `font-variant-numeric: tabular-nums` across all funding balances, NDIS numbers, dates, and claim totals.
-- **Single-Elevation Depth**: Flat slate surfaces (`bg-slate-900 border border-slate-800/80`) with zero nested card borders.
-- **Drive Ingestion Drawer**: A dedicated modal/drawer displaying:
-  1. Google Drive Folder Selector (via Google Picker / Drive API).
-  2. Batch processing status list with live progress indicators.
-  3. Extracted metadata preview with editable confirmation before Firestore commit.
-  4. Instant audit log generation for compliance tracking.
+1. **CommandCenter Quick Action Floating Menu (`CommandCenter.tsx`)**: A floating speed-dial launcher positioned in the lower-right viewport of the Command Center that lets practitioners rapidly trigger **New Case Note**, **Log Incident**, **Add NDIS Goal**, or **Ingest Drive Folder** via inline quick-entry modals, with a one-click option to jump directly into the full target module.
+2. **ClientsModule Vertical Clinical Timeline (`ClientsModule.tsx` & `ParticipantClinicalTimeline.tsx`)**: A chronological vertical timeline integrated into the Participant Detail view of `ClientsModule` that aggregates and visualizes **Clinical Case Notes**, **Reportable Incidents**, **NDIS Goal Progression & GAS Milestones**, and **Clinical Document Uploads**, complete with category filter tabs, live keyword search, and expandable event cards.
+3. **Runtime & Build Stability**: Maintain isolated `.next-dev` (development server) and `.next` (production build) outputs, ensure zero TypeScript or runtime errors, and preserve full Light/Dark theme parity.
 
 ---
 
-## 3. Google Drive Participant Folder Ingestion Pipeline
+## 2. Key Features & UX Flows
 
-### A. Folder Detection & Traversal
-- Utilize authorized Google Drive access (`https://www.googleapis.com/auth/drive.readonly` and `drive.file`) to traverse the user-selected parent folder or individual participant folders.
-- Detect folder names (e.g. `[Participant Name] - NDIS [Number]` or `Surname, Firstname`) and enumerate all clinical documents inside:
-  - NDIS Plan PDFs / Service Agreements
-  - Behaviour Support Plans (BSP) & Functional Behaviour Assessments (FBA)
-  - Medical summaries, diagnostic letters, and emergency profiles
+### A. CommandCenter Quick Action Floating Menu
+- **Floating Speed-Dial Trigger**:
+  - Fixed bottom-right launcher button (`Quick Actions`) with smooth spring/opacity transitions and keyboard shortcut toggle (`Alt+N` / `Esc` to close).
+  - Expands upward into a structured speed-dial menu featuring:
+    1. **New Case Note** — Opens an inline SOAP/BIRP/SIMPL quick-entry modal bound to `addCaseNote`, with participant selector, session duration, clinical summary fields, and an **"Open Full Case Notes Module"** jump button.
+    2. **Log Reportable Incident** — Opens an inline NDIS Commission incident logger bound to `addIncident`, capturing participant, severity (`Low`, `Medium`, `High`, `Critical - 24h Notice`), category, immediate action taken, and an **"Open Incidents Module"** jump button.
+    3. **Add NDIS Goal** — Opens an inline goal creation modal bound to `addClientGoal`, capturing target participant, goal title, NDIS support category (`Capacity Building`, `Core`, `Social & Community`), target date, baseline GAS score (`-2` to `+2`), and an **"Open NDIS Goal Tracker"** jump button.
+    4. **Ingest Drive Folder (AI)** — Launches the Google Drive Folder AI Ingestion modal directly from the speed-dial.
+- **Live Feedback & Audit Logging**:
+  - Submitting any inline quick-entry modal persists immediately to the Zustand store (`useManagementStore`), writes an immutable entry via `addAuditLog`, and displays a confirmation toast with a direct link to view the record in its dedicated module.
 
-### B. Gemini-Powered Clinical Extraction (`/api/drive/parse-participant`)
-- Send document text or binary PDFs securely to Gemini 2.5 Flash with structured JSON schema:
-  - Participant full legal name, preferred name, date of birth, gender
-  - NDIS participant number (9 digits)
-  - Funding allocation by category (Core, Capacity Building, Capital)
-  - Primary & secondary disability diagnoses
-  - Emergency contact details, support coordinator name and email
-  - High-risk flags (restrictive practices, epilepsy, aspiration risks)
-  - Key active goals and plan review dates
-- Validate extracted data against the `Client` TypeScript interface.
-
-### C. Live Firestore Persistence
-- Commit validated participant records to the Firestore `clients` collection under the user's workspace.
-- Store source Google Drive file references and direct web-view links in the participant's `documents` sub-collection for 1-click access.
-
----
-
-## 4. Mock Data Purge & Database Initialization
-1. **Store Initialization Update (`stores/slices/clientsSlice.ts` & `syncSlice.ts`)**:
-   - Set `clients: []`, `caseNotes: []`, `incidents: []`, `claims: []`, and `bspPlans: []` as defaults instead of loading `INITIAL_CLIENTS`.
-   - Update `useManagementStore` hydration to listen directly to the live Firestore `clients` collection via `onSnapshot` / real-time listener when signed in.
-2. **Purge Action Trigger**:
-   - Provide an explicit "Purge All Mock Data" action in the Settings / System tab that wipes any residual test artifacts from Firestore and local caches.
-3. **Empty State Experience**:
-   - Design empty states for Clients, Case Notes, and Billing with direct call-to-action buttons: `"Import from Google Drive"`, `"Sync with 17hats"`, and `"Add New Participant"`.
+### B. ClientsModule Vertical Clinical Timeline
+- **Unified Chronological Event Engine**:
+  - Dynamically aggregates all records for the currently selected participant (`selectedClient`) across four clinical streams:
+    - **Clinical Notes**: SOAP, BIRP, and SIMPL session notes (`caseNotes` filtered by `clientId`), including practitioner, session duration, and billable support item code.
+    - **Incidents**: Behavioural and statutory incidents (`incidents` filtered by `clientId`), highlighting severity, NDIS Commission 24h status, and antecedent/response details.
+    - **Goal Milestones**: NDIS goal creation targets, achievement status, and historical Goal Attainment Scaling (`gasHistory`) progression checkpoints from `selectedClient.goals`.
+    - **Documents**: Linked Google Drive clinical vault files and uploaded assessments (`attachedDocuments` / `documents`), including folder category and uploader metadata.
+- **Interactive Controls & Expandable Details**:
+  - **Segmented Category Filter Bar**: Filter events by `All Events`, `Clinical Notes`, `Goal Milestones`, `Incidents`, or `Documents` with live event counts.
+  - **Live Timeline Search**: Instant keyword filtering across event titles, clinical notes, practitioner names, and support categories.
+  - **Sort Direction Toggle**: Switch between `Newest First` and `Oldest First`.
+  - **Expandable Event Nodes**: Clicking any timeline node expands its full clinical payload (e.g., full SOAP breakdown, GAS score progression history, incident immediate actions, or document preview/Drive actions) alongside a **"View in Module"** action button.
+  - **Empty State Handling**: When a participant has no events matching the active filter, renders a clean empty state with quick triggers to log a note, add a goal, or link a Google Drive document.
 
 ---
 
-## 5. External Integrations Architecture
-
-### A. 17hats Integration (`/api/integrations/17hats/sync`)
-- Secure API Key configuration stored in environment variables (`SEVENTEEN_HATS_API_KEY`) and accessible via secure server-side API proxy.
-- Bidirectional or ingest sync:
-  - Fetch Contacts $\rightarrow$ Map to Breakthrough Participants / Leads
-  - Fetch Projects $\rightarrow$ Map to NDIS Service Episodes
-  - Fetch Invoices $\rightarrow$ Map to Billing / Claim status
-- Sync status badge in the Hub Header with last synced timestamp and count.
-
-### B. Xero Accounting Integration (`/api/auth/xero/*`)
-- Ensure token exchange, automatic token refresh, and tenant selection work smoothly.
-- Map generated NDIS claims to Xero Sales Invoices with correct NDIS line item codes and GST-free classifications.
-
-### C. Google Workspace Integration
-- Google Drive: Seamless participant file and folder importing.
-- Google Calendar: Session sync for allied health practitioners.
-- Google Gmail: Direct progress note and plan distribution to Support Coordinators.
+## 3. Design & Aesthetic Direction
+- **Clinical Precision & Dual-Theme Parity**: Full Light and Dark mode surface/text pairing (`bg-white dark:bg-slate-900`, `border-slate-200 dark:border-slate-800`) consistent with Breakthrough OS.
+- **Tabular Numerals & Zero-Pill Metadata**: All timestamps, durations, GAS scores, and event counters use `font-mono tabular-nums`; static event metadata uses clean typographic separators (`·`) while interactive filter tabs use segmented button states.
+- **Accessible Semantic Signaling**: Each timeline category uses a distinct icon and label (`FileText` for Clinical Notes, `Target` for Goal Milestones, `AlertOctagon` for Incidents, `FolderOpen` for Documents) so state is never communicated by color alone.
 
 ---
 
-## 6. Implementation Steps & Sequencing
-
-1. **Step 1: Mock Data Decoupling**
-   - Update `clientsSlice.ts`, `syncSlice.ts`, and `index.ts` to initialize with empty arrays and live Firestore synchronization.
-   - Remove auto-populating demo data on login.
-2. **Step 2: Google Drive Ingestion API & Modal**
-   - Create `/api/drive/ingest-folder/route.ts` using Google Drive API and Gemini 2.5 Flash for PDF/doc parsing.
-   - Build `GoogleDriveIngestModal.tsx` in `components/features/` allowing folder selection, real-time scanning progress, extracted data preview, and one-click commit to Firestore.
-3. **Step 3: 17hats Server Route & Integration Panel**
-   - Build `/api/integrations/17hats/sync/route.ts` with API key support, contact normalization, and error handling.
-   - Add 17hats connection card in `GoogleWorkspaceHub.tsx` / `PracticeToolsModule.tsx` with API key input, test connection button, and instant sync.
-4. **Step 4: Xero & Google Workspace Verification**
-   - Verify Xero invoice push and token refresh.
-   - Confirm Google Picker and Drive direct links work across client profile tabs.
-5. **Step 5: Compilation, Lint & Live Testing**
-   - Run `compile_applet` and `lint_applet`.
-   - Run end-to-end API tests to verify clean imports, 0 errors, and complete state persistence.
-
----
-
-## 7. Verification & Acceptance Criteria
-- [ ] No dummy/mock participants visible on initial load; store populates exclusively from Firestore.
-- [ ] User can pick a Google Drive folder containing participant files; Gemini extracts accurate client details into the UI.
-- [ ] Extracted participant is committed to Firestore with all NDIS goals, budgets, and drive document links.
-- [ ] 17hats API key authentication succeeds and ingests contacts into client leads/participants.
-- [ ] Xero and Google Workspace integrations authenticate and perform operations without runtime errors.
-- [ ] Build succeeds with 0 lint warnings and `HTTP 200` on all endpoints.
+## 4. Verification Plan
+- **Type & Build Verification**: Run `compile_applet` (`npm run build`) to confirm zero TypeScript, Next.js route, or bundle errors.
+- **Live Server Verification**: Verify the running development server on port 3000 responds with `HTTP/1.1 200 OK` and that both new workflows operate seamlessly with live and sample NDIS datasets.

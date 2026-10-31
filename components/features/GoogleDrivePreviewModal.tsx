@@ -368,7 +368,7 @@ export const GoogleDrivePreviewModal: React.FC<GoogleDrivePreviewModalProps> = (
         file: {
           id: driveFileId,
           name: document.name,
-          mimeType: document.mimeType,
+          mimeType: document.mimeType || 'application/octet-stream',
           url: fullDriveUrl,
           sizeBytes: document.sizeBytes,
           description: (document as any).description
@@ -454,7 +454,7 @@ export const GoogleDrivePreviewModal: React.FC<GoogleDrivePreviewModalProps> = (
         <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
           <div className="flex items-center gap-3 min-w-0">
             <div className="p-2.5 rounded-xl bg-teal-500/10 text-teal-400 shrink-0">
-              {getFileIcon(document.mimeType)}
+              {getFileIcon(document.mimeType || '')}
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">

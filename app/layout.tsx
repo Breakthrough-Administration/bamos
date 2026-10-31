@@ -1,12 +1,36 @@
 import type { Metadata, Viewport } from 'next';
+import { Plus_Jakarta_Sans, DM_Sans, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
+
+const plusJakarta = Plus_Jakarta_Sans({
+  subsets: ['latin'],
+  weight: ['500', '600', '700', '800'],
+  variable: '--font-display',
+  display: 'swap',
+});
+
+const dmSans = DM_Sans({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-sans',
+  display: 'swap',
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-mono',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'Breakthrough Allied Health & NDIS Operations OS',
-  description: 'Enterprise NDIS practice management system with clinical case notes, incident management, PRODA PACE claiming, SCHADS award roster compliance, and biometric security.',
+  description:
+    'Enterprise NDIS practice management system with clinical case notes, incident management, PRODA PACE claiming, SCHADS award roster compliance, and biometric security.',
   openGraph: {
     title: 'Breakthrough Allied Health & NDIS Operations OS',
-    description: 'Enterprise NDIS practice management system with clinical case notes, incident management, PRODA PACE claiming, SCHADS award roster compliance, and biometric security.',
+    description:
+      'Enterprise NDIS practice management system with clinical case notes, incident management, PRODA PACE claiming, SCHADS award roster compliance, and biometric security.',
   },
   manifest: '/manifest.json',
   icons: {
@@ -35,7 +59,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`${plusJakarta.variable} ${dmSans.variable} ${jetbrainsMono.variable} dark`}
+      suppressHydrationWarning
+    >
       <head>
         <script
           dangerouslySetInnerHTML={{
@@ -75,7 +103,10 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="antialiased bg-slate-950 text-slate-50 min-h-screen" suppressHydrationWarning>
+      <body
+        className="antialiased bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-50 min-h-screen transition-colors duration-150"
+        suppressHydrationWarning
+      >
         {children}
       </body>
     </html>

@@ -4,7 +4,10 @@ import { GoogleGenAI } from '@google/genai';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+  httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+});
 
 export async function POST(req: NextRequest) {
   try {
@@ -134,11 +137,10 @@ JSON Output Schema:
 Return ONLY valid JSON. No conversational text or markdown code fences.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.8-flash',
       contents: prompt,
       config: {
-        responseMimeType: 'application/json',
-        temperature: 0.2
+        responseMimeType: 'application/json'
       }
     });
 

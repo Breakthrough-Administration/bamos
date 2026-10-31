@@ -606,7 +606,7 @@ export const ParticipantPortalView: React.FC = () => {
                       month: 'short',
                       year: 'numeric'
                     })
-                  : new Date(doc.uploadedAt).toLocaleDateString('en-AU', {
+                  : new Date(doc.uploadedAt || new Date().toISOString()).toLocaleDateString('en-AU', {
                       day: 'numeric',
                       month: 'short',
                       year: 'numeric'

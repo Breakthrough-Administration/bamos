@@ -184,6 +184,7 @@ export interface CaseNote {
   }>;
   status: 'Draft' | 'Submitted' | 'Approved' | 'Archived';
   flaggedForReview: boolean;
+  isLocked?: boolean;
   reviewNotes?: string;
   billable?: boolean;
   isVerified?: boolean;
@@ -253,6 +254,8 @@ export interface Incident {
   practitionerName?: string;
   incidentDate: string;
   date?: string;
+  time?: string;
+  location?: string;
   title?: string;
   category?: IncidentCategory | string;
   incidentTime?: string;
@@ -285,6 +288,7 @@ export interface Lead {
   id: string;
   prospectName: string;
   name?: string;
+  contactPerson?: string;
   ndisNumber?: string;
   contactName: string;
   contactEmail: string;
@@ -295,6 +299,8 @@ export interface Lead {
   status?: string;
   source: 'NDIS Portal' | 'Support Coordinator Referral' | 'Direct Website' | 'Hospital / Allied Health' | string;
   estimatedPlanValue: number;
+  estimatedBudget?: number;
+  serviceRequested?: string;
   assignedPractitionerId?: string;
   assignedPractitionerName?: string;
   supportNeeds?: string;
@@ -318,6 +324,14 @@ export interface Practitioner {
   specialties?: string[];
   specialty?: string;
   status?: string;
+  caseloadCount?: number;
+  maxCaseload?: number;
+  billableTargetHours?: number;
+  currentBillableHours?: number;
+  schadsLevel?: string;
+  hourlyPayRate?: number;
+  workerScreeningId?: string;
+  ahpraNumber?: string;
   workerScreeningNumber?: string;
   workerScreeningExpiry?: string;
   wwccNumber?: string;
@@ -381,17 +395,21 @@ export interface BSPDocument {
     | 'Panel Review'
     | 'Submitted to NDIS'
     | 'Active'
+    | 'Approved'
     | 'Superseded'
     | 'Under Review'
     | 'Panel Submitted'
     | 'Re-Authorized'
     | 'Current'
-    | 'Due in 30 Days';
+    | 'Due in 30 Days'
+    | string;
   summary: string;
   primaryBehaviorsOfConcern: string[];
+  primaryBehavioursOfConcern?: string[];
+  triggers?: string[];
   proactiveStrategies: string[];
   reactiveStrategies: string[];
-  restrictivePractices: RestrictivePractice[];
+  restrictivePractices: RestrictivePractice[] | string[];
   reviewDate: string;
   authorName: string;
   lastUpdated: string;
@@ -412,16 +430,21 @@ export interface BillingClaim {
   clientName: string;
   ndisNumber: string;
   serviceDate: string;
+  dateOfService?: string;
   ndisSupportItem: string; // e.g. "07_002_0115_8_3 - Specialist Behavioural Intervention"
   supportItemCode: string;
+  supportItemNumber?: string;
   hours: number;
   hoursWorked?: number;
   quantity?: number;
   unitRate: number;
+  rate?: number;
   unitPrice?: number;
   totalAmount: number;
   status: 'Pending' | 'Approved' | 'Submitted PACE' | 'Paid' | 'Rejected';
   invoiceNumber: string;
+  claimReference?: string;
+  isPaceCompliant?: boolean;
   reconciliationStatus?: 'Reconciled' | 'Pending' | 'Failed' | 'SLA_Breach_Risk';
   reconciliationError?: string;
   slaDeadline?: string;
@@ -617,11 +640,14 @@ export interface AttachedDocument {
   id: string;
   name: string;
   url: string;
-  sizeBytes: number;
-  mimeType: string;
-  uploadedBy: string;
+  sizeBytes?: number;
+  mimeType?: string;
+  uploadedBy?: string;
   uploadedByName?: string;
-  uploadedAt: string;
+  uploadedAt?: string;
+  dateUploaded?: string;
+  fileType?: string;
+  fileSize?: string;
   category: 'consent' | 'assessment' | 'bsp' | 'incident_photo' | 'other' | DocumentCategory;
   tags?: DocumentTag[];
   clientId?: string;

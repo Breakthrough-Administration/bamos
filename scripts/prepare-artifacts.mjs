@@ -17,6 +17,7 @@ function copyDirRecursive(src, dest) {
   fs.mkdirSync(dest, { recursive: true });
   const entries = fs.readdirSync(src, { withFileTypes: true });
   for (const entry of entries) {
+    if (entry.name === 'package.json' || entry.name === 'cache' || entry.name === 'types') continue;
     const srcPath = path.join(src, entry.name);
     const destPath = path.join(dest, entry.name);
     if (entry.isDirectory()) {
@@ -25,42 +26,50 @@ function copyDirRecursive(src, dest) {
       try {
         fs.copyFileSync(srcPath, destPath);
       } catch (e) {
-        // Ignore locked files or duplicate copy attempts
+        // Ignore locked files
       }
     }
   }
 }
 
 try {
-  // 1. Prepare target directories for all standard static/hybrid artifact sniffers
+  // Remove heavy webpack cache inside .next so filesystem sync stays fast
+  const nextCache = path.join(nextDir, 'cache');
+  if (fs.existsSync(nextCache)) {
+    try {
+      fs.rmSync(nextCache, { recursive: true, force: true });
+    } catch (e) {}
+  }
+
+  // Prepare target directories for static/hybrid artifact uploaders
   const targetDirs = [distDir, buildDir, outDir];
   for (const dir of targetDirs) {
     fs.mkdirSync(dir, { recursive: true });
-  }
-
-  // 2. Mirror .next build into dist, build, and out
-  if (fs.existsSync(nextDir)) {
-    for (const dir of targetDirs) {
-      copyDirRecursive(nextDir, path.join(dir, '.next'));
-      copyDirRecursive(nextDir, dir);
-
-      // Explicitly mirror .next/static to _next/static inside the artifact dirs
-      const nextStatic = path.join(nextDir, 'static');
-      if (fs.existsSync(nextStatic)) {
-        copyDirRecursive(nextStatic, path.join(dir, '_next', 'static'));
-        copyDirRecursive(nextStatic, path.join(dir, 'static'));
-      }
+    const strayPkg = path.join(dir, 'package.json');
+    if (fs.existsSync(strayPkg)) {
+      try {
+        fs.unlinkSync(strayPkg);
+      } catch (e) {}
     }
   }
 
-  // 3. Mirror public static assets into dist, build, and out
+  // Copy static assets from .next/static into dist, build, and out
+  const nextStatic = path.join(nextDir, 'static');
+  if (fs.existsSync(nextStatic)) {
+    for (const dir of targetDirs) {
+      copyDirRecursive(nextStatic, path.join(dir, '_next', 'static'));
+      copyDirRecursive(nextStatic, path.join(dir, 'static'));
+    }
+  }
+
+  // Copy public assets into dist, build, and out
   if (fs.existsSync(publicDir)) {
     for (const dir of targetDirs) {
       copyDirRecursive(publicDir, dir);
     }
   }
 
-  // 4. Ensure an index.html exists in all artifact directories for static-artifact sniffers
+  // Ensure index.html, 404.html, and 200.html exist in all artifact directories
   const possibleHtmlSources = [
     path.join(nextDir, 'server', 'app', 'index.html'),
     path.join(nextDir, 'server', 'app', 'page.html'),
@@ -91,12 +100,11 @@ try {
 
   for (const dir of targetDirs) {
     fs.writeFileSync(path.join(dir, 'index.html'), fallbackHtml, 'utf8');
-    // Also mirror to 404.html and 200.html for SPA static host fallbacks
     fs.writeFileSync(path.join(dir, '404.html'), fallbackHtml, 'utf8');
     fs.writeFileSync(path.join(dir, '200.html'), fallbackHtml, 'utf8');
   }
 
-  console.log('> ✓ Production build artifacts populated across dist/, build/, out/, and .next/');
+  console.log('> ✓ Production build artifacts populated across dist/, build/, and out/');
 } catch (err) {
   console.error('> Warning: Failed to prepare artifact mirrors:', err);
 }

@@ -11,11 +11,16 @@ const __dirname = path.dirname(__filename);
 const projectDir = process.cwd();
 
 const hasCompleteBuild =
+  fs.existsSync(path.join(projectDir, '.next', 'required-server-files.json')) &&
+  fs.existsSync(path.join(projectDir, '.next', 'prerender-manifest.json')) &&
   fs.existsSync(path.join(projectDir, '.next', 'routes-manifest.json')) &&
   fs.existsSync(path.join(projectDir, '.next', 'server', 'app-paths-manifest.json')) &&
   fs.existsSync(path.join(projectDir, '.next', 'build-manifest.json'));
 
 const dev = process.env.NODE_ENV !== 'production' && !hasCompleteBuild;
+if (!dev) {
+  (process.env as Record<string, string | undefined>).NODE_ENV = 'production';
+}
 const hostname = '0.0.0.0';
 const port = parseInt(process.env.PORT || '3000', 10);
 

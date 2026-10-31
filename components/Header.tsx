@@ -13,7 +13,9 @@ import {
   LogOut,
   ShieldCheck,
   Stethoscope,
-  Command
+  Command,
+  Database,
+  RotateCcw
 } from 'lucide-react';
 import { logOutGoogle } from '@/lib/firebase';
 import { IntegrationStatusIndicator } from './IntegrationStatusIndicator';
@@ -31,7 +33,11 @@ export const Header: React.FC = () => {
     toggleMobileSidebar,
     notifications,
     markNotificationRead,
-    setActiveTab
+    setActiveTab,
+    clients,
+    isUsingMockData,
+    loadDemoData,
+    clearAllMockData
   } = useManagementStore();
 
   const [showNotifications, setShowNotifications] = useState(false);
@@ -66,11 +72,11 @@ export const Header: React.FC = () => {
           <div>
             <span className="font-extrabold text-sm tracking-tight text-white flex items-center gap-1.5">
               Breakthrough OS
-              <span className="hidden sm:inline-block px-1.5 py-0.2 rounded text-[10px] bg-teal-500/10 text-teal-400 border border-teal-500/20 font-mono">
+              <span className="hidden sm:inline-block px-1.5 py-0.5 rounded text-[10px] bg-teal-500/10 text-teal-400 border border-teal-500/20 font-mono">
                 NDIS 2026
               </span>
             </span>
-            <p className="text-[10px] text-slate-400 hidden sm:block">Allied Health Operations</p>
+            <p className="text-[10px] text-slate-400 hidden sm:block">Allied Health & PBS Operations</p>
           </div>
         </div>
       </div>
@@ -83,7 +89,7 @@ export const Header: React.FC = () => {
         >
           <span className="flex items-center gap-2">
             <Search className="w-4 h-4 text-slate-400" />
-            <span>Search participants, notes, claims...</span>
+            <span>Search participants, notes, claims, or modules...</span>
           </span>
           <kbd className="flex items-center gap-0.5 text-[10px] font-mono bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-slate-300">
             <Command className="w-3 h-3" /> K
@@ -91,8 +97,29 @@ export const Header: React.FC = () => {
         </button>
       </div>
 
-      {/* Right: Connectivity status, Theme, Notifications, User */}
+      {/* Right: Dataset Switcher, Connectivity status, Theme, Notifications, User */}
       <div className="flex items-center gap-2">
+        {/* Sample Dataset Quick Switcher */}
+        {clients.length === 0 ? (
+          <button
+            onClick={loadDemoData}
+            className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 transition-colors cursor-pointer"
+            title="Load realistic sample NDIS clinical dataset"
+          >
+            <Database className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Load Sample Data</span>
+          </button>
+        ) : isUsingMockData ? (
+          <button
+            onClick={() => clearAllMockData()}
+            className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 transition-colors cursor-pointer"
+            title="Clear sample dataset and return to empty live state"
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+            <span>Clear Sample Data</span>
+          </button>
+        ) : null}
+
         {/* Centralized Google Workspace Integration Status Indicator */}
         <IntegrationStatusIndicator />
 
@@ -115,6 +142,7 @@ export const Header: React.FC = () => {
           onClick={toggleTheme}
           className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
           title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+          aria-label="Switch color theme"
         >
           {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
         </button>
@@ -135,8 +163,10 @@ export const Header: React.FC = () => {
           {showNotifications && (
             <div className="absolute right-0 mt-2 w-80 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-3 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
               <div className="flex items-center justify-between pb-2 border-b border-slate-800 mb-2">
-                <span className="text-xs font-bold text-white">Notifications ({unreadCount})</span>
-                <span className="text-[10px] text-teal-400">NDIS Alerts</span>
+                <span className="text-xs font-bold text-white font-mono tabular-nums">
+                  Notifications ({unreadCount})
+                </span>
+                <span className="text-[10px] text-teal-400 font-semibold">NDIS Alerts</span>
               </div>
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {notifications.length === 0 ? (
@@ -221,7 +251,31 @@ export const Header: React.FC = () => {
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-slate-800">
+              <div className="pt-2 border-t border-slate-800 space-y-1">
+                {clients.length === 0 ? (
+                  <button
+                    onClick={() => {
+                      loadDemoData();
+                      setShowUserMenu(false);
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-indigo-400 hover:bg-indigo-500/10 transition-colors"
+                  >
+                    <Database className="w-4 h-4" />
+                    Load Sample NDIS Dataset
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      clearAllMockData();
+                      setShowUserMenu(false);
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-amber-400 hover:bg-amber-500/10 transition-colors"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    Reset to Empty Live State
+                  </button>
+                )}
+
                 <button
                   onClick={handleLogout}
                   className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-rose-400 hover:bg-rose-500/10 transition-colors"
