@@ -23,6 +23,7 @@ import {
   FileText
 } from 'lucide-react';
 import { GoogleDriveFolderIngestModal } from './GoogleDriveFolderIngestModal';
+import { CommandCenterQuickActions } from './CommandCenterQuickActions';
 
 export const CommandCenter: React.FC = () => {
   const {
@@ -405,6 +406,11 @@ export const CommandCenter: React.FC = () => {
       <GoogleDriveFolderIngestModal
         isOpen={isIngestModalOpen}
         onClose={() => setIsIngestModalOpen(false)}
+      />
+
+      {/* Floating Speed-Dial Quick Action Launcher */}
+      <CommandCenterQuickActions
+        onOpenDriveIngest={() => setIsIngestModalOpen(true)}
       />
     </div>
   );

@@ -9,6 +9,7 @@ import { GoogleDrivePreviewModal } from './GoogleDrivePreviewModal';
 import { BulkParticipantImporter } from './BulkParticipantImporter';
 import { GoogleDriveFolderIngestModal } from './GoogleDriveFolderIngestModal';
 import { SeventeenHatsModal } from './SeventeenHatsModal';
+import { ParticipantClinicalTimeline } from './ParticipantClinicalTimeline';
 import {
   Users,
   Search,
@@ -18,6 +19,7 @@ import {
   Mail,
   MapPin,
   FileText,
+  Clock,
   Target,
   Edit2,
   Trash2,
@@ -61,6 +63,7 @@ export const ClientsModule: React.FC = () => {
   const [isBulkImporterOpen, setIsBulkImporterOpen] = useState(false);
   const [isDriveIngestOpen, setIsDriveIngestOpen] = useState(false);
   const [isSeventeenHatsOpen, setIsSeventeenHatsOpen] = useState(false);
+  const [detailViewMode, setDetailViewMode] = useState<'vault' | 'timeline'>('vault');
 
   // Preview Modal state
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
@@ -495,226 +498,271 @@ export const ClientsModule: React.FC = () => {
               </div>
             </div>
 
-            {/* Google Drive Clinical Vault & 12 Folder Hierarchy */}
-            <div className="p-4 rounded-2xl bg-indigo-950/20 border border-indigo-500/30 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <HardDrive className="w-4 h-4 text-indigo-400" />
-                    <span className="text-xs font-bold text-white uppercase tracking-wider">
-                      Google Drive Participant Vault
-                    </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-bold border border-indigo-500/30">
-                      12 Clinical Folders
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-400 flex items-center gap-1 font-mono">
-                    <FolderOpen className="w-3 h-3 text-indigo-400 shrink-0" />
-                    <span className="text-indigo-200">
-                      {selectedClient.driveFolderPath || `Staff Share Drive > Participants > Behaviour Support > ${selectedClient.name}`}
-                    </span>
-                  </p>
-                </div>
+            {/* Sub-view Switcher: Clinical Dossier & Vault vs Clinical Activity Timeline */}
+            <div className="flex items-center gap-1.5 p-1 bg-slate-900 border border-slate-800 rounded-2xl w-fit">
+              <button
+                type="button"
+                onClick={() => setDetailViewMode('vault')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                  detailViewMode === 'vault'
+                    ? 'bg-teal-500/20 text-teal-300 border border-teal-500/30 shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Folder className="w-3.5 h-3.5" />
+                <span>Clinical Dossier &amp; Vault</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setDetailViewMode('timeline')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                  detailViewMode === 'timeline'
+                    ? 'bg-teal-500/20 text-teal-300 border border-teal-500/30 shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>Clinical Activity Timeline</span>
+              </button>
+            </div>
 
-                <div className="flex items-center gap-2 flex-wrap">
-                  <a
-                    href={selectedClient.driveFolderUrl || 'https://drive.google.com/drive/u/1/folders/1jd5KeDWRr2-xYf3f2'}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold inline-flex items-center gap-1.5 transition-colors shadow-sm"
-                  >
-                    <ExternalLink className="w-3 h-3" /> Open in Drive
-                  </a>
-                  <button
-                    onClick={() => handleLaunchPickerForFolder()}
-                    className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-bold inline-flex items-center gap-1.5 transition-colors border border-slate-700"
-                  >
-                    <Search className="w-3 h-3 text-teal-400" /> Picker Search
-                  </button>
-                </div>
-              </div>
-
-              {/* 12 Standard Subfolders Grid (matching image: Goals Statement, Emergency Plan, BSP, Invoices, FBA, NDIS Plan, Letters, Consent, Assessments, Referral, Progress Notes, Service Agreement) */}
-              <div className="space-y-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  Folder Structure (Breakthrough Template)
-                </span>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                  {currentSubfolders.map((folderName) => {
-                    const docsInFolder = clientAttachedDocs.filter(
-                      (d) =>
-                        d.metadata?.folderCategory === folderName ||
-                        d.category?.toLowerCase() === folderName.toLowerCase() ||
-                        d.name.toLowerCase().includes(folderName.toLowerCase().split(' ')[0])
-                    );
-
-                    return (
-                      <div
-                        key={folderName}
-                        onClick={() => handleLaunchPickerForFolder(folderName)}
-                        className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-indigo-500/50 hover:bg-slate-800/80 transition-all cursor-pointer group space-y-1.5"
-                        title={`Click to pick documents for ${folderName}`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <Folder className="w-3.5 h-3.5 text-indigo-400 group-hover:text-indigo-300 transition-colors" />
-                          {docsInFolder.length > 0 && (
-                            <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-teal-500/20 text-teal-300 font-bold border border-teal-500/30">
-                              {docsInFolder.length}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[11px] font-semibold text-slate-200 group-hover:text-white truncate">
-                          {folderName}
-                        </p>
-                        <span className="text-[9px] text-slate-500 group-hover:text-indigo-300 block">
-                          + Link file
+            {detailViewMode === 'timeline' ? (
+              <ParticipantClinicalTimeline
+                client={selectedClient}
+                onOpenNewCaseNote={() => setActiveTab('case-notes')}
+                onOpenNewGoal={() => setActiveTab('ndis-goals')}
+                onOpenNewIncident={() => setActiveTab('incidents')}
+              />
+            ) : (
+              <>
+                {/* Google Drive Clinical Vault & 12 Folder Hierarchy */}
+                <div className="p-4 rounded-2xl bg-indigo-950/20 border border-indigo-500/30 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <HardDrive className="w-4 h-4 text-indigo-400" />
+                        <span className="text-xs font-bold text-white uppercase tracking-wider">
+                          Google Drive Participant Vault
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-bold border border-indigo-500/30">
+                          12 Clinical Folders
                         </span>
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
+                      <p className="text-[11px] text-slate-400 flex items-center gap-1 font-mono">
+                        <FolderOpen className="w-3 h-3 text-indigo-400 shrink-0" />
+                        <span className="text-indigo-200">
+                          {selectedClient.driveFolderPath || `Staff Share Drive > Participants > Behaviour Support > ${selectedClient.name}`}
+                        </span>
+                      </p>
+                    </div>
 
-              {/* Attached Clinical Documents list */}
-              {clientAttachedDocs.length > 0 && (
-                <div className="pt-2 border-t border-slate-800/80 space-y-2">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    Linked Documents ({clientAttachedDocs.length})
-                  </span>
-                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                    {clientAttachedDocs.map((doc) => (
-                      <div
-                        key={doc.id}
-                        className="p-2 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between gap-3 text-xs"
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <a
+                        href={selectedClient.driveFolderUrl || 'https://drive.google.com/drive/u/1/folders/1jd5KeDWRr2-xYf3f2'}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold inline-flex items-center gap-1.5 transition-colors shadow-sm"
                       >
-                        <div className="flex items-center gap-2 truncate">
-                          <FileText className="w-3.5 h-3.5 text-teal-400 shrink-0" />
-                          <span className="text-white font-medium truncate">{doc.name}</span>
-                          {doc.metadata?.folderCategory && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-mono">
-                              {doc.metadata.folderCategory}
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <button
-                            onClick={() => {
-                              setPreviewDoc(doc);
-                              setPreviewModalOpen(true);
-                            }}
-                            className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white"
-                            title="Preview file"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </button>
-                          <a
-                            href={doc.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white"
-                            title="Open Google Drive link"
-                          >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                          </a>
-                          <button
-                            onClick={() => removeDocumentFromClient(selectedClient.id, doc.id)}
-                            className="p-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400"
-                            title="Unlink document"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                        <ExternalLink className="w-3 h-3" /> Open in Drive
+                      </a>
+                      <button
+                        onClick={() => handleLaunchPickerForFolder()}
+                        className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-bold inline-flex items-center gap-1.5 transition-colors border border-slate-700 cursor-pointer"
+                      >
+                        <Search className="w-3 h-3 text-teal-400" /> Picker Search
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
 
-            {/* Contact Information */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="p-3.5 rounded-2xl bg-slate-800/40 border border-slate-700/40 space-y-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                  <Phone className="w-3 h-3 text-teal-400" /> Phone
-                </span>
-                <p className="text-xs text-white font-medium">
-                  {selectedClient.contactNumber || selectedClient.emergencyContact?.phone || 'Not provided'}
-                </p>
-              </div>
-
-              <div className="p-3.5 rounded-2xl bg-slate-800/40 border border-slate-700/40 space-y-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                  <Mail className="w-3 h-3 text-teal-400" /> Nominee Contact
-                </span>
-                <p className="text-xs text-white font-medium truncate">
-                  {selectedClient.emergencyContact?.name} ({selectedClient.emergencyContact?.relationship || 'Primary'})
-                </p>
-              </div>
-
-              <div className="p-3.5 rounded-2xl bg-slate-800/40 border border-slate-700/40 space-y-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                  <MapPin className="w-3 h-3 text-teal-400" /> Suburb / Base
-                </span>
-                <p className="text-xs text-white font-medium truncate">
-                  {typeof selectedClient.address === 'string'
-                    ? selectedClient.address
-                    : selectedClient.address?.suburb
-                    ? `${selectedClient.address.suburb}, ${selectedClient.address.state || 'VIC'}`
-                    : selectedClient.suburb || 'Melbourne, VIC'}
-                </p>
-              </div>
-            </div>
-
-            {/* Diagnostic Profile */}
-            <div className="space-y-2">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                Primary Diagnosis & Behaviour Support Needs
-              </h3>
-              <div className="p-4 rounded-2xl bg-slate-800/40 border border-slate-700/40 space-y-2">
-                <p className="text-sm font-semibold text-white">{selectedClient.primaryDisability}</p>
-                {selectedClient.secondaryDisabilities && selectedClient.secondaryDisabilities.length > 0 && (
-                  <p className="text-xs text-slate-400">
-                    Secondary: {selectedClient.secondaryDisabilities.join(', ')}
-                  </p>
-                )}
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <span className="text-[11px] px-2.5 py-1 rounded-xl bg-slate-800 text-teal-300 border border-slate-700">
-                    Plan Management: Plan-Managed
-                  </span>
-                  <span className="text-[11px] px-2.5 py-1 rounded-xl bg-slate-800 text-teal-300 border border-slate-700">
-                    Category: Capacity Building - Relationships (PBS)
-                  </span>
-                  {selectedClient.restrictivePracticesActive && (
-                    <span className="text-[11px] px-2.5 py-1 rounded-xl bg-rose-500/15 text-rose-300 border border-rose-500/30 font-bold">
-                      Restrictive Practices Protocol Active
+                  {/* 12 Standard Subfolders Grid */}
+                  <div className="space-y-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Folder Structure (Breakthrough Template)
                     </span>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                      {currentSubfolders.map((folderName) => {
+                        const docsInFolder = clientAttachedDocs.filter(
+                          (d) =>
+                            d.metadata?.folderCategory === folderName ||
+                            d.category?.toLowerCase() === folderName.toLowerCase() ||
+                            d.name.toLowerCase().includes(folderName.toLowerCase().split(' ')[0])
+                        );
+
+                        return (
+                          <div
+                            key={folderName}
+                            onClick={() => handleLaunchPickerForFolder(folderName)}
+                            className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-indigo-500/50 hover:bg-slate-800/80 transition-all cursor-pointer group space-y-1.5"
+                            title={`Click to pick documents for ${folderName}`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <Folder className="w-3.5 h-3.5 text-indigo-400 group-hover:text-indigo-300 transition-colors" />
+                              {docsInFolder.length > 0 && (
+                                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-teal-500/20 text-teal-300 font-bold border border-teal-500/30">
+                                  {docsInFolder.length}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] font-semibold text-slate-200 group-hover:text-white truncate">
+                              {folderName}
+                            </p>
+                            <span className="text-[9px] text-slate-500 group-hover:text-indigo-300 block">
+                              + Link file
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Attached Clinical Documents list */}
+                  {clientAttachedDocs.length > 0 && (
+                    <div className="pt-2 border-t border-slate-800/80 space-y-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        Linked Documents ({clientAttachedDocs.length})
+                      </span>
+                      <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                        {clientAttachedDocs.map((doc) => (
+                          <div
+                            key={doc.id}
+                            className="p-2 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between gap-3 text-xs"
+                          >
+                            <div className="flex items-center gap-2 truncate">
+                              <FileText className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                              <span className="text-white font-medium truncate">{doc.name}</span>
+                              {doc.metadata?.folderCategory && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-mono">
+                                  {doc.metadata.folderCategory}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                onClick={() => {
+                                  setPreviewDoc(doc);
+                                  setPreviewModalOpen(true);
+                                }}
+                                className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white cursor-pointer"
+                                title="Preview file"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </button>
+                              <a
+                                href={doc.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white"
+                                title="Open Google Drive link"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                              <button
+                                onClick={() => removeDocumentFromClient(selectedClient.id, doc.id)}
+                                className="p-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 cursor-pointer"
+                                title="Unlink document"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
-              </div>
-            </div>
 
-            {/* Quick Actions to Other Clinical Modules */}
-            <div className="pt-2 flex flex-wrap gap-3">
-              <button
-                onClick={() => setActiveTab('ndis-goals')}
-                className="px-4 py-2 rounded-xl bg-teal-600/20 hover:bg-teal-600/30 text-teal-300 border border-teal-500/30 text-xs font-bold flex items-center gap-2"
-              >
-                <Target className="w-4 h-4" /> NDIS Goals Tracker
-              </button>
-              <button
-                onClick={() => setActiveTab('case-notes')}
-                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center gap-2 border border-slate-700"
-              >
-                <FileText className="w-4 h-4" /> Clinical Case Notes
-              </button>
-              <button
-                onClick={() => setActiveTab('google-workspace')}
-                className="px-4 py-2 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-bold flex items-center gap-2"
-              >
-                <HardDrive className="w-4 h-4" /> Google Workspace Hub
-              </button>
-            </div>
+                {/* Contact Information */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="p-3.5 rounded-2xl bg-slate-800/40 border border-slate-700/40 space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                      <Phone className="w-3 h-3 text-teal-400" /> Phone
+                    </span>
+                    <p className="text-xs text-white font-medium">
+                      {selectedClient.contactNumber || selectedClient.emergencyContact?.phone || 'Not provided'}
+                    </p>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-slate-800/40 border border-slate-700/40 space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                      <Mail className="w-3 h-3 text-teal-400" /> Nominee Contact
+                    </span>
+                    <p className="text-xs text-white font-medium truncate">
+                      {selectedClient.emergencyContact?.name} ({selectedClient.emergencyContact?.relationship || 'Primary'})
+                    </p>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-slate-800/40 border border-slate-700/40 space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                      <MapPin className="w-3 h-3 text-teal-400" /> Suburb / Base
+                    </span>
+                    <p className="text-xs text-white font-medium truncate">
+                      {typeof selectedClient.address === 'string'
+                        ? selectedClient.address
+                        : selectedClient.address?.suburb
+                        ? `${selectedClient.address.suburb}, ${selectedClient.address.state || 'VIC'}`
+                        : selectedClient.suburb || 'Melbourne, VIC'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Diagnostic Profile */}
+                <div className="space-y-2">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Primary Diagnosis &amp; Behaviour Support Needs
+                  </h3>
+                  <div className="p-4 rounded-2xl bg-slate-800/40 border border-slate-700/40 space-y-2">
+                    <p className="text-sm font-semibold text-white">{selectedClient.primaryDisability}</p>
+                    {selectedClient.secondaryDisabilities && selectedClient.secondaryDisabilities.length > 0 && (
+                      <p className="text-xs text-slate-400">
+                        Secondary: {selectedClient.secondaryDisabilities.join(', ')}
+                      </p>
+                    )}
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <span className="text-[11px] px-2.5 py-1 rounded-xl bg-slate-800 text-teal-300 border border-slate-700">
+                        Plan Management: Plan-Managed
+                      </span>
+                      <span className="text-[11px] px-2.5 py-1 rounded-xl bg-slate-800 text-teal-300 border border-slate-700">
+                        Category: Capacity Building - Relationships (PBS)
+                      </span>
+                      {selectedClient.restrictivePracticesActive && (
+                        <span className="text-[11px] px-2.5 py-1 rounded-xl bg-rose-500/15 text-rose-300 border border-rose-500/30 font-bold">
+                          Restrictive Practices Protocol Active
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Quick Actions to Other Clinical Modules */}
+                <div className="pt-2 flex flex-wrap gap-3">
+                  <button
+                    onClick={() => setDetailViewMode('timeline')}
+                    className="px-4 py-2 rounded-xl bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 border border-teal-500/30 text-xs font-bold flex items-center gap-2 cursor-pointer transition-colors"
+                  >
+                    <Clock className="w-4 h-4" /> View Clinical Activity Timeline
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('ndis-goals')}
+                    className="px-4 py-2 rounded-xl bg-teal-600/20 hover:bg-teal-600/30 text-teal-300 border border-teal-500/30 text-xs font-bold flex items-center gap-2 cursor-pointer"
+                  >
+                    <Target className="w-4 h-4" /> NDIS Goals Tracker
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('case-notes')}
+                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center gap-2 border border-slate-700 cursor-pointer"
+                  >
+                    <FileText className="w-4 h-4" /> Clinical Case Notes
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('google-workspace')}
+                    className="px-4 py-2 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-bold flex items-center gap-2 cursor-pointer"
+                  >
+                    <HardDrive className="w-4 h-4" /> Google Workspace Hub
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
